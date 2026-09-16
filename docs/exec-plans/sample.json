@@ -1,0 +1,88 @@
+{
+  "$schema": "../../scripts/gen/sample.schema.json",
+  "schema_version": 1,
+  "name": "TotalSegmentator Batch Pipeline",
+  "slug": "totalsegmentator-batch-pipeline",
+  "package_scope": "@totalsegmentator-batch-pipeline",
+  "purpose": "A batch medical-imaging pipeline that ingests raw 3D CT/MRI volumes to Backblaze B2, runs TotalSegmentator locally to produce multi-label masks covering 100+ anatomical structures plus per-structure volumetric statistics, and writes the masks and stats back to a B2 derived prefix — building a scalable segmented imaging dataset with B2 as the sole storage layer.",
+  "tagline": "Segment 100+ anatomical structures into Backblaze B2 — at PACS scale.",
+  "primary_entity": { "schema": "Study", "singular": "study", "plural": "studies" },
+  "features": [
+    {
+      "title": "Study Library",
+      "route": "/studies",
+      "doc": "docs/features/studies.md",
+      "summary": "browse, create, edit, delete and segment CT/MRI studies",
+      "workflow_heading": "Manage Studies"
+    },
+    {
+      "title": "Segmentation",
+      "route": null,
+      "doc": "docs/features/segmentation.md",
+      "summary": "run TotalSegmentator locally to produce a 100+ structure multi-label mask"
+    },
+    {
+      "title": "Volumetric Stats",
+      "route": null,
+      "doc": "docs/features/volumetric-stats.md",
+      "summary": "per-structure volume (mL), bounding box and CT Hounsfield stats as JSON"
+    },
+    {
+      "title": "Dashboard",
+      "route": "/",
+      "doc": "docs/features/dashboard.md",
+      "summary": "studies processed, structures segmented, and source-to-derived write amplification",
+      "workflow_heading": "View Dashboard"
+    },
+    {
+      "title": "Bulk Volume Ingest",
+      "route": "/upload",
+      "doc": "docs/features/file-upload.md",
+      "summary": "drag-and-drop bulk upload of NIfTI volumes to the B2 source prefix",
+      "workflow_heading": "Ingest Volumes"
+    },
+    {
+      "title": "Bucket Explorer",
+      "route": "/files",
+      "doc": "docs/features/file-browser.md",
+      "summary": "full-bucket browse, preview, download, delete",
+      "workflow_heading": "Browse the Bucket"
+    },
+    {
+      "title": "Settings",
+      "route": "/settings",
+      "doc": "docs/features/settings.md",
+      "summary": "theme plus labelled demo preference fields",
+      "workflow_heading": "Change Preferences"
+    }
+  ],
+  "b2_surface": [
+    { "operation": "presigned PUT", "why": "the browser bulk-uploads large source volumes directly to B2 (source prefix), bypassing the Function payload cap" },
+    { "operation": "put_object", "why": "write the study record.json and the derived stats.json, and (multipart) the segmentation mask .nii.gz" },
+    { "operation": "list_objects_v2", "why": "the Study Library, the source-volume picker, and the dashboard write-amplification aggregates" },
+    { "operation": "head_object", "why": "cheap per-object sizes for the amplification metric, and the /health connectivity probe" },
+    { "operation": "get_object", "why": "stream the source volume to a local temp file for segmentation, and read the record and stats JSON" },
+    { "operation": "presigned GET", "why": "download and inline-view the mask, source volume, and stats" },
+    { "operation": "delete_object", "why": "remove every object under a study's prefix on delete" }
+  ],
+  "b2_key_prefix": "studies/",
+  "stack": {
+    "web": "Next.js 16, React 19, Tailwind v4, shadcn/ui, TanStack Query, Recharts",
+    "api": "FastAPI, Python 3.12+, boto3, Pydantic v2, TotalSegmentator, nibabel, NumPy",
+    "storage": "Backblaze B2 (S3-compatible API)",
+    "package_manager": "pnpm workspaces"
+  },
+  "deployment_targets": ["railway"],
+  "env_vars": [
+    { "name": "B2_APPLICATION_KEY_ID", "required": true, "secret": true, "note": "B2 application key ID (**keyID** in the B2 console)" },
+    { "name": "B2_APPLICATION_KEY", "required": true, "secret": true, "note": "B2 application key (**applicationKey**) — shown once at creation" },
+    { "name": "B2_BUCKET_NAME", "required": true, "secret": false, "note": "bucket unique name (**Bucket Unique Name** in the B2 console)" },
+    { "name": "B2_REGION", "required": true, "secret": false, "note": "the region inside the bucket's **Endpoint** (`s3.<region>.backblazeb2.com`); the S3 endpoint is derived from it" },
+    { "name": "B2_PUBLIC_URL_BASE", "required": false, "secret": false, "note": "public object base URL, when the bucket is public" },
+    { "name": "NEXT_PUBLIC_API_URL", "required": false, "secret": false, "note": "separate-origin deploys only; Next.js inlines it at build time" },
+    { "name": "TS_DEVICE", "required": false, "secret": false, "note": "segmentation device override: auto|cpu|gpu|mps (default auto — CUDA, then CPU; MPS is opt-in as nnU-Net support is weak)" }
+  ],
+  "attribution_token": "b2ai-totalsegmentator-batch-pipeline",
+  "repo": { "org": "backblaze-b2-samples", "name": "totalsegmentator-batch-pipeline" },
+  "screenshots": []
+}
