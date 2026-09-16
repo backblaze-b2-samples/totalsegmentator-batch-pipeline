@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Play, Trash2 } from "lucide-react";
+import { Download, Loader2, Play, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,15 @@ import {
 import { StudyStatusBadge } from "./study-status-badge";
 import { EditStudyDialog } from "./study-form";
 
+// mm:ss — no server-side percentage exists for a run, so an elapsed clock is
+// the honest thing to show advancing, not a fabricated progress fraction.
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function download(url: string) {
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -56,6 +66,35 @@ export function StudyDetail({ studyId }: { studyId: string }) {
   const maskDownload = useStudyMaskDownload();
   const sourceDownload = useStudySourceDownload();
 
+  // Drive the busy UI from the mutation itself (optimistic), not just the
+  // polled study status — `running` only flips true after the create/segment
+  // round trip refetches, which left the button reading "Segment" for
+  // several seconds after it was already disabled. Computed above the early
+  // returns (with data?. guards) because the elapsed-time effect below must
+  // stay an unconditional hook call.
+  const busy = data?.study.status === "running" || segment.isPending;
+
+  // No server-side run-start timestamp exists, so "when the run started" is
+  // tracked client-side: the first moment this page observes `busy`. Ticks
+  // once a second only while busy, and resets when the run ends.
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const startedAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!busy) {
+      // No setState here: the elapsed label is only rendered while `running`
+      // below, so a stale value sitting unused in state is harmless — the
+      // `tick()` call right after the next start immediately overwrites it
+      // before it's ever shown.
+      startedAtRef.current = null;
+      return;
+    }
+    if (startedAtRef.current === null) startedAtRef.current = Date.now();
+    const tick = () => setElapsedMs(Date.now() - (startedAtRef.current as number));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [busy]);
+
   if (error) {
     return <ErrorState error={error} onRetry={() => refetch()} />;
   }
@@ -65,6 +104,10 @@ export function StudyDetail({ studyId }: { studyId: string }) {
 
   const { study, stats, mask_url } = data;
   const running = study.status === "running";
+  // The status badge used to read `study.status` directly, so it kept saying
+  // "Pending" for the same 3-5s gap the button used to show "Segment" for —
+  // drive it from the same `busy` signal instead.
+  const displayStatus = busy && study.status === "pending" ? "running" : study.status;
 
   const runSegmentation = async () => {
     try {
@@ -111,16 +154,20 @@ export function StudyDetail({ studyId }: { studyId: string }) {
         <div className="space-y-1.5">
           <div className="flex items-center gap-3">
             <h1 className="page-title">{study.study_id}</h1>
-            <StudyStatusBadge status={study.status} />
+            <StudyStatusBadge status={displayStatus} />
           </div>
           {study.description && (
             <p className="text-sm text-muted-foreground">{study.description}</p>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={runSegmentation} disabled={running || segment.isPending}>
-            <Play className="h-3.5 w-3.5" />
-            {running ? "Segmenting…" : study.status === "done" ? "Re-segment" : "Segment"}
+          <Button size="sm" onClick={runSegmentation} disabled={busy}>
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            {busy ? "Segmenting…" : study.status === "done" ? "Re-segment" : "Segment"}
           </Button>
           <EditStudyDialog study={study} />
           <AlertDialog>
@@ -247,6 +294,28 @@ export function StudyDetail({ studyId }: { studyId: string }) {
                 running
                   ? "Volumetrics appear here when the run finishes."
                   : "Run segmentation to compute per-structure volumetrics."
+              }
+              action={
+                running ? (
+                  <div className="flex flex-col items-center gap-2">
+                    {/* No server-side percentage exists, so this is deliberately
+                        indeterminate (same `.progress-indeterminate` sweep already
+                        used for the analogous no-percentage wait in upload-progress.tsx). */}
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Segmentation running"
+                      className="progress-indeterminate h-1 w-40 rounded-full"
+                    />
+                    {/* An advancing elapsed clock, not a fabricated percentage —
+                        a 30-90s run with only a static sweep can look frozen.
+                        Plain text (no aria-live): announcing a per-second tick
+                        would spam screen readers. */}
+                    <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                      Segmenting… {formatElapsed(elapsedMs)}
+                    </span>
+                  </div>
+                ) : undefined
               }
             />
           )}

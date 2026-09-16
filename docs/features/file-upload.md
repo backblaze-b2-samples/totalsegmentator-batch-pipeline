@@ -37,6 +37,7 @@ through the API.
 - The browser PUTs the bytes directly to B2 (XHR, with progress); the API never buffers them, which is what lifts any serverless payload cap
 - `verify` HEADs the stored object and range-reads the leading bytes to confirm the gzip signature
 - The volume now shows up as an unassigned source in the Study Library's "New study" picker; creating a study moves it into `studies/<id>/source/`
+- The page header also carries a persistent "Go to Studies →" link, unlike the per-file "Go to Studies" link below (same destination — the studies list, not a pre-filled create form) which only exists while that upload row is still in the queue
 
 ## Edge Cases
 - Non-NIfTI type → rejected client-side by the accept list and server-side by the allow-list (415)
@@ -48,7 +49,11 @@ through the API.
 - Empty: dropzone prompt
 - Loading: per-file progress bars; app-wide in-progress indicator persists across navigation
 - Error: per-file error with retry
-- Complete: success toast; "Clear finished" to reset the queue
+- Complete: success toast; per-file "View in Files" and "Go to Studies" links (the
+  latter just navigates to [Study Library](studies.md) — it does not open the New
+  Study dialog or pre-fill this volume); "Clear finished" to reset the queue
+- Always: a persistent "Go to Studies →" link in the page header, independent of
+  queue state, so the ingest→create path survives a reload or a later revisit
 
 ## Verification
 - Test files: `services/api/tests/test_upload_validation.py`, `services/api/tests/test_upload_conflict.py`, `services/api/tests/test_upload_activity.py`

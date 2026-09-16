@@ -45,7 +45,16 @@ own `studies/` prefix.
 - Ingest one or more volumes first (see [Bulk Volume Ingest](file-upload.md)); they land in `uploads/`
 - Open `/studies` → "New study" → pick modality/task/fast and a source volume → Create
 - The API validates the id, server-side-copies the volume into `studies/<id>/source/`, and writes `record.json` with status `pending`
+- On success the dialog closes and the app navigates straight to the new study's detail page — no manual click back into the list to find the row just created
 - Open the study → "Segment" starts the run (status → `running`); the page polls until `done`/`failed`
+- When more than one study is `pending`, the Studies list also offers "Segment all
+  pending", which calls the same per-study `POST /studies/{id}/segment` once per
+  pending study, sequentially — a frontend-only convenience, not a batch endpoint.
+  It snapshots the pending ids at click time and submits that fixed set exactly
+  once each — the list can refetch and shrink mid-run (each segment call still
+  invalidates it once, after the whole batch) without dropping a later id. Any id
+  that fails to start is reported by name and stays `pending`, so it's still
+  visible and retryable from the same button
 - Edit metadata or delete the study (and all its objects) from the detail page
 
 ## Edge Cases
@@ -59,6 +68,11 @@ own `studies/` prefix.
 - Loading: skeleton rows / detail skeleton
 - Error: inline ErrorState with retry
 - Loaded: table with status badges; detail with stats table
+- Running (detail page): the status badge, the Segment button, and a live
+  elapsed-time readout ("Segmenting… 0:34", ticking client-side from when the
+  run was first observed — there is no server-side percentage) all flip
+  together off the same optimistic signal, instead of the badge lagging the
+  button until the next poll
 
 ## Verification
 - Test files: `services/api/tests/test_studies.py`

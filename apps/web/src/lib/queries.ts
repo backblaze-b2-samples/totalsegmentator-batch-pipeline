@@ -267,6 +267,39 @@ export function useSegmentStudy(studyId: string) {
   });
 }
 
+/**
+ * Segment-by-id variant of `useSegmentStudy`, for callers that don't know
+ * their target studyId until render time — e.g. "Segment all pending" on the
+ * Studies list, which calls the same `POST /studies/{id}/segment` endpoint
+ * once per pending study rather than binding one id per hook instance.
+ *
+ * `skipInvalidate` lets a caller that fires this in a loop (the bulk button)
+ * opt out of the per-item invalidation and reconcile once after the whole
+ * batch instead — see `useInvalidateStudies` below. Refetching the list
+ * after every item is what let the list's `pendingIds` shrink mid-loop.
+ */
+export function useSegmentStudyById() {
+  const qc = useQueryClient();
+  return useMutation<
+    Study,
+    ApiError,
+    { studyId: string; req?: SegmentRequest; skipInvalidate?: boolean }
+  >({
+    mutationFn: ({ studyId, req }) => segmentStudy(studyId, req ?? {}),
+    onSuccess: (_data, { studyId, skipInvalidate }) => {
+      if (skipInvalidate) return;
+      qc.invalidateQueries({ queryKey: [...qk.study(), studyId] });
+      qc.invalidateQueries({ queryKey: [...qk.all, "studies"] });
+    },
+  });
+}
+
+/** Refresh the studies list once — see `useSegmentStudyById`'s `skipInvalidate`. */
+export function useInvalidateStudies() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: [...qk.all, "studies"] });
+}
+
 // On-demand presigned downloads — mutations so they are never cached or replayed.
 export function useStudyMaskDownload() {
   return useMutation<FileUrlResponse, ApiError, string>({

@@ -4,7 +4,9 @@ Orchestrates the repo layer; no boto3 here. Segmentation runs on a background
 thread so the POST returns immediately with the study in `running` state and the
 UI polls the detail endpoint. The engine import is lazy (in
 `repo/segmentation.py`), so a clone without the ML stack records the run as
-`failed` with an actionable message instead of raising.
+`failed` with an actionable message instead of raising. Engine calls are
+serialized via `_SEGMENTATION_LOCK` so bulk/concurrent triggers queue instead
+of contending (torch/nnU-Net can hang if run in parallel).
 """
 
 import logging
@@ -32,6 +34,9 @@ from app.types.formatting import humanize_bytes
 logger = logging.getLogger(__name__)
 
 STUDY_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
+
+# At most one segmentation engine call runs at a time, process-wide.
+_SEGMENTATION_LOCK = threading.Lock()
 
 
 class StudyError(Exception):
@@ -244,7 +249,8 @@ def _run_segmentation_job(
     if record is None:
         return
     try:
-        result = segmentation_repo.run_segmentation(record, task, fast, roi_subset)
+        with _SEGMENTATION_LOCK:
+            result = segmentation_repo.run_segmentation(record, task, fast, roi_subset)
         record = studies_repo.read_record(study_id) or record
         record.update(
             {

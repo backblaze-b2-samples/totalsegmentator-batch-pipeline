@@ -260,8 +260,11 @@ export function FileBrowser() {
             <AlertDialogTitle>Delete file?</AlertDialogTitle>
             <AlertDialogDescription className="break-words">
               This will permanently delete{" "}
+              {/* Full object key, not just the bare filename: the same
+                  filename recurs under many studies' source/ prefixes, so
+                  the filename alone doesn't say which one this is. */}
               <strong className="break-all font-semibold text-foreground">
-                {deleteTarget?.filename}
+                {deleteTarget?.key}
               </strong>
               . This action cannot be undone.
             </AlertDialogDescription>

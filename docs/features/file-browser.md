@@ -46,6 +46,7 @@ on any object in the bucket, not just this app's artifacts.
 - `/files` lists the whole bucket from a shared, cached listing (also used by the dashboard)
 - Click an object → preview modal; expand "Detailed metadata" → `GET /files-by-key/detail`
 - Download issues a presigned attachment URL; delete removes the object and invalidates the listing cache
+- The delete confirmation names the full object key, not just the filename — the same filename recurs under many studies' `source/` prefixes
 
 ## Edge Cases
 - Path-traversal / dangerous keys → 400

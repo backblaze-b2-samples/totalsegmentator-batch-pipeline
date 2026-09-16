@@ -60,3 +60,12 @@ Known tech debt items. Agents update this when they discover or create tech debt
 | Custom `FileNotFoundError` shadowed the built-in | Renamed to `FileNotFoundServiceError` |
 | Dropzone accepted any file type client-side | `accept` allow-list mirroring backend `ALLOWED_TYPES` (tested for drift) |
 | No test harness for feature specs | pytest suite across upload, files, activity, errors, validation, rate limit, pagination |
+
+## 2026-09-16 — verify
+
+- /studies "Segment all pending" — bulk action is unscoped (segments every account-wide pending study); a swept-in study whose source was deleted stays "Pending" with only a toast, no per-row error badge → weak per-row failure feedback at scale. Edge case (default fresh-batch path completes fully); gate OVER-CLAIMED the blocker. (.local/verify/C5/20-studies-list-final.png)
+- /studies "Segment all pending" — no way to scope the bulk op to the just-ingested batch; fine for the single-user local demo, a gap for shared/multi-user deployments. (.local/verify/C5/12a-bulk-segment-before.png)
+- /studies/{id} segmentation failure — message is a raw botocore string ("HeadObject ... 404 Not Found") instead of friendly copy like the create path (services/api/app/service/studies.py:131 has "source volume no longer exists — re-ingest it"); add the equivalent in _record_failure (services/api/app/service/studies.py:271). (.local/verify/B5/16-study-err-final.png)
+- GET /studies list — O(N) one get_object per study (services/api/app/repo/studies.py:103): ~19s at 56 studies vs ~0.3s at 0; demo-scale, but a scale limit vs the PACS-scale positioning. Consider a single manifest/index or parallel reads. (measured this run)
+- / Dashboard — top-right "New study" only navigates to /studies (dialog closed); two near-identical "New study" buttons back-to-back. (.local/verify/A/13-dashboard-newstudy-cta-landing.png)
+- Multiple surfaces — net::ERR_ABORTED console noise from 3s polling requests aborted by client navigation; cosmetic, no user-visible impact. (.local/verify/A5/11-study-detail-final-state.png)

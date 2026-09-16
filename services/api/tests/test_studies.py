@@ -6,6 +6,8 @@ endpoint must never 500, and the background run must land as `failed` with an
 actionable message.
 """
 
+import threading
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -170,6 +172,63 @@ def test_segmentation_job_records_failed_when_engine_missing(store, monkeypatch)
     record = store.records["demo-ct-001"]
     assert record["status"] == "failed"
     assert "requirements-ml.txt" in record["error"]
+
+
+def test_segmentation_jobs_serialize_across_concurrent_calls(store, monkeypatch):
+    """Bulk "segment all pending" triggers many jobs at once; `_SEGMENTATION_LOCK`
+    must ensure only one engine call runs at a time (queued, not parallel),
+    since concurrent torch/nnU-Net inferences in one process can hang."""
+    study_ids = ("demo-ct-001", "demo-ct-002")
+    for study_id in study_ids:
+        store.records[study_id] = {
+            "study_id": study_id,
+            "modality": "CT",
+            "task": "total",
+            "fast": True,
+            "status": "running",
+            "source_key": "[REDACTED-SECRET]",
+            "source_bytes": 10,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+
+    active = 0
+    max_active = 0
+    state_lock = threading.Lock()
+
+    def _fake_run_segmentation(record, task, fast, roi_subset):
+        nonlocal active, max_active
+        with state_lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with state_lock:
+            active -= 1
+        return {
+            "mask_key": f"studies/{record['study_id']}/mask.nii.gz",
+            "stats_key": f"studies/{record['study_id']}/stats.json",
+            "structure_count": 5,
+            "derived_bytes": 100,
+        }
+
+    monkeypatch.setattr(
+        studies_service.segmentation_repo, "run_segmentation", _fake_run_segmentation
+    )
+
+    threads = [
+        threading.Thread(
+            target=studies_service._run_segmentation_job,
+            args=(study_id, "total", True, None),
+        )
+        for study_id in study_ids
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert max_active == 1
+    for study_id in study_ids:
+        assert store.records[study_id]["status"] == "done"
 
 
 def test_resolve_device_auto_defaults_to_cpu_without_gpu():

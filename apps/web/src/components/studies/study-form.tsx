@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -73,6 +74,7 @@ const createSchema = z.object({
 type CreateValues = z.infer<typeof createSchema>;
 
 export function NewStudyDialog() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const { data: sources = [] } = useStudySources({ enabled: open });
   const createStudy = useCreateStudy();
@@ -93,6 +95,22 @@ export function NewStudyDialog() {
 
   const modality = form.watch("modality");
 
+  // Guarantee `task` is always a valid, non-empty enum value for the current
+  // modality. The RadioGroup handler below already sets a matching default on
+  // change, but a re-render of the Task <Select> can race that write (its
+  // option set is keyed off `modality` and briefly doesn't contain the old
+  // task value), so this effect is the safety net that closes the gap —
+  // without it, submitting right after switching modality could send task: ''
+  // and fail Zod validation with no visible cause.
+  useEffect(() => {
+    const validTasks = TASKS_BY_MODALITY[modality].map((t) => t.value);
+    if (!validTasks.includes(form.getValues("task"))) {
+      form.setValue("task", DEFAULT_TASK[modality] as CreateValues["task"], {
+        shouldValidate: true,
+      });
+    }
+  }, [modality, form]);
+
   const onSubmit = async (values: CreateValues) => {
     try {
       await createStudy.mutateAsync({
@@ -103,6 +121,9 @@ export function NewStudyDialog() {
       toast.success(`Study "${values.study_id}" created`);
       setOpen(false);
       form.reset();
+      // Land on the new study directly instead of leaving the user on the
+      // list to find and click the row they just created.
+      router.push(`/studies/${values.study_id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create study");
     }
@@ -152,8 +173,12 @@ export function NewStudyDialog() {
                       value={field.value}
                       onValueChange={(value) => {
                         field.onChange(value);
-                        // Keep the task valid for the chosen modality.
-                        form.setValue("task", DEFAULT_TASK[value] as CreateValues["task"]);
+                        // Keep the task valid for the chosen modality; the
+                        // effect above is the safety net if this races a
+                        // stale Select render.
+                        form.setValue("task", DEFAULT_TASK[value] as CreateValues["task"], {
+                          shouldValidate: true,
+                        });
                       }}
                       className="flex gap-6"
                     >

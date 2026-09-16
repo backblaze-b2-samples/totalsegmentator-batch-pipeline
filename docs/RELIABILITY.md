@@ -1,4 +1,4 @@
-<!-- last_verified: 2026-08-06 -->
+<!-- last_verified: 2026-09-16 -->
 # Reliability
 
 Reliability expectations and practices for this project.
@@ -38,6 +38,10 @@ The download counter and the `/metrics` counters are **in-process, per replica**
 
 - **Download counter** (`app/repo/counter.py`) persists to a JSON file at `DOWNLOAD_COUNT_FILE` (default `.data/download_count.json`, resolved from the repo root — deliberately outside `services/api/`, which `uvicorn --reload` watches, so a download never writes into the dev reloader's watch tree). On an ephemeral filesystem (Railway without a mounted volume or Vercel Functions) it **resets to 0 on every redeploy**. With multiple replicas or Function instances each keeps its own file/count. For durable, shared counts: mount a persistent volume or swap the adapter for Redis/DB.
 - **`/metrics` counters** live in process memory and reset on restart. Behind a load balancer, each replica reports only its own slice — scrape with an instance label and aggregate, or push to a shared collector.
+
+## Segmentation Serialization
+
+- Concurrent/bulk segmentation triggers (e.g. "Segment all pending") each start their own background thread, but the actual engine call is serialized process-wide behind a lock (`service/studies.py::_SEGMENTATION_LOCK`) — at most one TotalSegmentator/nnU-Net inference runs at a time. Extra jobs queue behind the lock and run one after another rather than contending, which was observed to deadlock a process running multiple heavy-ML inferences concurrently. See [docs/features/segmentation.md](features/segmentation.md).
 
 ## Rate Limiting
 

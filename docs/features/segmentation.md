@@ -38,6 +38,7 @@ headline capability of this sample, on-device with no external API key.
 - The worker calls `run_segmentation`: `_import_engine()` (lazy), `resolve_device()`, stream the source to a temp file, `totalsegmentator(input, output, ml=True, task, fast, roi_subset, device)`
 - Per-structure volumetrics are computed (see [Volumetric Stats](volumetric-stats.md)); mask + stats are uploaded to B2; the record is finalized
 - The UI polls `GET /studies/{id}` until status is `done` or `failed`
+- **Segmentation is serialized**: `service/studies.py`'s module-level `_SEGMENTATION_LOCK` wraps only the `run_segmentation` call, so at most one engine run executes at a time process-wide. Triggering many studies at once (e.g. "Segment all pending") starts a thread per study, but each queues behind the lock and runs one after another — still each reaching `done`/`failed` — instead of racing concurrently. This avoids torch/nnU-Net multiprocessing contention that can otherwise deadlock/hang a run indefinitely. A study waiting for the lock still shows `running`; there is no separate "queued" state.
 
 ## Device selection
 - Runtime auto-detect, defaulting to CPU. `auto` → CUDA GPU if `torch.cuda.is_available()`, else CPU. It never issues an unconditional `.cuda()` or asserts on a missing GPU.
@@ -55,8 +56,8 @@ headline capability of this sample, on-device with no external API key.
 - Loaded: `done` badge, mask download button, stats table
 
 ## Verification
-- Test files: `services/api/tests/test_studies.py` (engine-unavailable path, device resolution), `services/api/tests/test_structure.py` (ML containment)
-- Required cases: segment returns `running` not 500; engine-absent records `failed` with the install hint; `resolve_device` defaults to CPU
+- Test files: `services/api/tests/test_studies.py` (engine-unavailable path, device resolution, concurrent-job serialization), `services/api/tests/test_structure.py` (ML containment)
+- Required cases: segment returns `running` not 500; engine-absent records `failed` with the install hint; `resolve_device` defaults to CPU; concurrently started jobs never overlap inside `run_segmentation` and each still reaches `done`
 - Focused verify command: `pnpm test:api`
 - Default pre-PR verify command: `pnpm verify` (core suite; the ML path runs at runtime, not in verify)
 - Full local verify command: `pnpm verify:full` when E2E/live prerequisites apply

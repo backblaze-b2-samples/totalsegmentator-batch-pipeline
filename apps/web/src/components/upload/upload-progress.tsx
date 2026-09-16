@@ -7,6 +7,7 @@ import {
   ChevronDown,
   FileIcon,
   FolderOpen,
+  Layers,
   Loader2,
   RotateCcw,
   XCircle,
@@ -179,6 +180,22 @@ function UploadRow({
                 <Link href="/files">
                   <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
                   View in Files
+                </Link>
+              </Button>
+              {/* Uploads promise ingested volumes "appear as sources when you
+                  create a study" but had no path there — only a dead end into
+                  Files. This link only navigates to the studies list (it does
+                  not open the New Study dialog or pre-fill this volume), so
+                  the label says exactly that instead of over-promising. */}
+              <Button
+                asChild
+                className="h-7 gap-1 px-2 text-xs"
+                size="sm"
+                variant="ghost"
+              >
+                <Link href="/studies">
+                  <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+                  Go to Studies
                 </Link>
               </Button>
             </div>
