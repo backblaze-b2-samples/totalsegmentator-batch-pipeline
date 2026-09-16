@@ -26,6 +26,24 @@ app's own features instead of rebuilding the same shell. Storage is
 
 <!-- gen:end readme-screenshots -->
 
+## What it looks like
+
+**Dashboard** — write-amplification ratio, studies processed, structures segmented and derived-on-B2 totals, with a source-vs-derived bytes chart and a recent-studies table.
+
+![Dashboard with write amplification, studies processed, structures segmented and a source vs derived bytes chart](docs/images/dashboard.png)
+
+**Studies** — the full CT/MRI study library, each row showing modality, task, status, structure count and source-to-derived sizes under the B2 `studies/` prefix.
+
+![Studies library table listing CT and MRI studies with modality, status, structure count and sizes](docs/images/studies.png)
+
+**Study detail** — per-study artifacts (source volume and segmentation mask on B2) plus the full per-structure volumetrics table: volume in mL, voxel count, and CT Hounsfield mean and standard deviation.
+
+![Study detail view with artifacts and a per-structure volumetrics table of volume, voxels and Hounsfield stats](docs/images/study-detail.png)
+
+**Bulk Volume Ingest** — drag-and-drop upload of raw NIfTI (`.nii.gz`) CT/MRI volumes straight to the B2 source prefix, ready to become studies.
+
+![Bulk volume ingest page with a drag-and-drop area for NIfTI volumes](docs/images/upload.png)
+
 ## Quick Start
 
 You need: Node.js >= 20, pnpm >= 10, Python >= 3.12, and a free **[Backblaze B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-totalsegmentator-batch-pipeline)**.
