@@ -86,9 +86,11 @@ services/api/
 - **Not Vercel** — `deployment_targets` is `["railway"]` and the README ships no
   Vercel button. Segmentation runs PyTorch/nnU-Net inference that cannot fit or
   complete inside a serverless function, so a Vercel one-click deploy would break
-  the "the button deploys the whole app" promise. The kit's Vercel entrypoint
-  scaffolding (`vercel.json`, `services/api/index.py`) is left inert but is not a
-  supported deploy target for this app.
+  the "the button deploys the whole app" promise. The deployable Vercel
+  declarations (the root, web and api `vercel.json` files) have been removed, so
+  nothing wires a deployable Vercel project; only the kit's inert
+  `services/api/index.py` ASGI wrapper remains, kept solely so the kit's
+  regression test (`tests/test_vercel_entrypoint.py`) still runs.
 
 External provisioning and deployment remain explicit user-approved actions.
 
