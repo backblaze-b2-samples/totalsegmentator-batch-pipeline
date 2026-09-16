@@ -1,14 +1,22 @@
 import type {
+  CreateStudyRequest,
   DailyUploadCount,
   DeleteFileResponse,
+  DeleteStudyResponse,
   FileMetadata,
   FileMetadataDetail,
   FileUploadResponse,
   FileUrlResponse,
   HealthStatus,
   PresignUploadResponse,
+  SegmentRequest,
+  SegmentationStats,
+  SourceObject,
+  Study,
+  StudyDetail,
+  UpdateStudyRequest,
   UploadStats,
-} from "@vibe-coding-starter-kit/shared";
+} from "@totalsegmentator-batch-pipeline/shared";
 
 import { API_CLIENT_ROUTES } from "./generated/api-routes";
 
@@ -269,6 +277,20 @@ export async function deleteFile(key: string) {
  * tracks the browser→B2 leg; when it reaches 100% the queue enters its
  * server-side phase (see `upload-status`) while `verify` runs.
  */
+/**
+ * Content type to sign into the presigned PUT. Browsers report NIfTI volumes
+ * inconsistently (often "" or "application/x-gzip"), and the signed PUT must
+ * carry a type the backend allow-lists, so `.nii.gz`/`.gz` are forced to
+ * `application/gzip`. Everything else uses the browser's own type.
+ */
+function resolveUploadContentType(file: File): string {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".nii.gz") || name.endsWith(".gz")) {
+    return "application/gzip";
+  }
+  return file.type || "application/octet-stream";
+}
+
 export async function uploadFile(
   file: File,
   onProgress?: (percent: number) => void
@@ -280,7 +302,7 @@ export async function uploadFile(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         filename: file.name,
-        content_type: file.type,
+        content_type: resolveUploadContentType(file),
         size_bytes: file.size,
       }),
     }
@@ -338,4 +360,77 @@ function putFileToStorage(
     }
     xhr.send(file);
   });
+}
+
+// --- Studies (the primary entity) -------------------------------------------
+// Hand-written per-app calls (see api-gen escapeHatch). Route paths and verbs
+// come from the generated registry, so they can't drift from the contract.
+
+/** Substitute a study id into a `{study_id}` route template. The parameter type
+ * requires the literal placeholder, so passing a placeholder-less path is a
+ * compile error rather than a request to a keyless URL. */
+function studyPath(
+  template: `${string}{study_id}${string}`,
+  studyId: string
+): string {
+  return template.replace("{study_id}", encodeURIComponent(studyId));
+}
+
+export async function getStudies(limit = 100) {
+  return apiFetch<Study[]>(`${API_CLIENT_ROUTES.studies.path}?limit=${limit}`);
+}
+
+export async function getStudyDetail(studyId: string) {
+  return apiFetch<StudyDetail>(studyPath(API_CLIENT_ROUTES.study.path, studyId));
+}
+
+export async function getStudySources() {
+  return apiFetch<SourceObject[]>(API_CLIENT_ROUTES.studySources.path);
+}
+
+export async function getSegmentationStats() {
+  return apiFetch<SegmentationStats>(API_CLIENT_ROUTES.studySegmentationStats.path);
+}
+
+export async function createStudy(req: CreateStudyRequest) {
+  return apiFetch<Study>(API_CLIENT_ROUTES.studyCreate.path, {
+    method: API_CLIENT_ROUTES.studyCreate.method.toUpperCase(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
+export async function updateStudy(studyId: string, req: UpdateStudyRequest) {
+  return apiFetch<Study>(studyPath(API_CLIENT_ROUTES.studyUpdate.path, studyId), {
+    method: API_CLIENT_ROUTES.studyUpdate.method.toUpperCase(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
+export async function deleteStudy(studyId: string) {
+  return apiFetch<DeleteStudyResponse>(
+    studyPath(API_CLIENT_ROUTES.studyDelete.path, studyId),
+    { method: API_CLIENT_ROUTES.studyDelete.method.toUpperCase() }
+  );
+}
+
+export async function segmentStudy(studyId: string, req: SegmentRequest = {}) {
+  return apiFetch<Study>(studyPath(API_CLIENT_ROUTES.studySegment.path, studyId), {
+    method: API_CLIENT_ROUTES.studySegment.method.toUpperCase(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
+export async function getStudyMaskUrl(studyId: string) {
+  return apiFetch<FileUrlResponse>(
+    studyPath(API_CLIENT_ROUTES.studyMaskDownload.path, studyId)
+  );
+}
+
+export async function getStudySourceUrl(studyId: string) {
+  return apiFetch<FileUrlResponse>(
+    studyPath(API_CLIENT_ROUTES.studySourceDownload.path, studyId)
+  );
 }

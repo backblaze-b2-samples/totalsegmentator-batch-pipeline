@@ -11,7 +11,7 @@ interface DropzoneProps {
   disabled?: boolean;
 }
 
-const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_SIZE = 600 * 1024 * 1024; // 600MB — raw CT/MRI volumes run 100-500MB
 
 export function Dropzone({
   onFilesSelected,
@@ -45,15 +45,15 @@ export function Dropzone({
   });
 
   const active = isDragActive && !disabled;
-  let title = "Drag & drop files here, or click to browse";
-  let description = "Max file size: 100 MB per file";
+  let title = "Drag & drop NIfTI volumes here, or click to browse";
+  let description = "NIfTI (.nii.gz) — up to 600 MB per volume";
 
   if (disabled) {
     title = "Uploads in progress";
-    description = "New files can be added when the current queue finishes.";
+    description = "New volumes can be added when the current queue finishes.";
   } else if (active) {
-    title = "Drop files here";
-    description = "Release to add files to the upload queue.";
+    title = "Drop volumes here";
+    description = "Release to add volumes to the ingest queue.";
   }
 
   let stateClasses = "border-border hover:border-primary/60 hover:bg-muted/60";

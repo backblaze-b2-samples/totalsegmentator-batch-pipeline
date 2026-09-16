@@ -1,42 +1,34 @@
 <!-- last_verified: 2026-08-12 -->
 <!-- gen:begin readme-header -->
-# Vibe Coding Starter Kit
+# TotalSegmentator Batch Pipeline
 
-Stop wiring boilerplate and start building. A well-engineered full-stack foundation — dashboard, drag-and-drop upload and a file browser — with Backblaze B2 storage already wired in, so builders skip the boilerplate loop.
+Segment 100+ anatomical structures into Backblaze B2 — at PACS scale. A batch medical-imaging pipeline that ingests raw 3D CT/MRI volumes to Backblaze B2, runs TotalSegmentator locally to produce multi-label masks covering 100+ anatomical structures plus per-structure volumetric statistics, and writes the masks and stats back to a B2 derived prefix — building a scalable segmented imaging dataset with B2 as the sole storage layer.
 
 Built for developers and AI coding agents: the scaffolding, the storage
 wiring and the agent-facing docs are already done, so you start on your
 app's own features instead of rebuilding the same shell. Storage is
-**[Backblaze B2](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start)**, integrated through the S3-compatible API.
+**[Backblaze B2](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-totalsegmentator-batch-pipeline)**, integrated through the S3-compatible API.
 
 **What you get out of the box:**
 - Full-stack dashboard UI (Next.js 16, React 19, Tailwind v4, shadcn/ui, TanStack Query, Recharts)
-- File Upload — drag-and-drop upload with real-time progress
-- File Browser — list, preview, download, delete files
-- Dashboard — stats cards, upload chart, recent uploads
-- Metadata Extraction — image dimensions, EXIF, PDF info, checksums
+- Study Library — browse, create, edit, delete and segment CT/MRI studies
+- Segmentation — run TotalSegmentator locally to produce a 100+ structure multi-label mask
+- Volumetric Stats — per-structure volume (mL), bounding box and CT Hounsfield stats as JSON
+- Dashboard — studies processed, structures segmented, and source-to-derived write amplification
+- Bulk Volume Ingest — drag-and-drop bulk upload of NIfTI volumes to the B2 source prefix
+- Bucket Explorer — full-bucket browse, preview, download, delete
 - Settings — theme plus labelled demo preference fields
-- Backend with a strict layered architecture and structural tests (FastAPI, Python 3.12+, boto3, Pydantic v2, Pillow, PyPDF2)
+- Backend with a strict layered architecture and structural tests (FastAPI, Python 3.12+, boto3, Pydantic v2, TotalSegmentator, nibabel, NumPy)
 - Agent-optimized docs — your AI coding agent can read the repo and start contributing immediately
 <!-- gen:end readme-header -->
 
 <!-- gen:begin readme-screenshots -->
-## What it looks like
 
-**Dashboard** — stats, upload activity, and recent uploads at a glance:
-
-![Dashboard view showing stat cards, upload activity chart, and recent uploads table](docs/images/b2-starterkit-dashboard1.png)
-
-**File browser** — tree view with preview, download, and delete:
-
-![File browser view showing a tree of files with hover actions](docs/images/b2-starterkit-fileview2.png)
-
-> **Deploy your own in one click** → [Deploy to Vercel](#deploying-to-vercel). One project, one origin, no CORS to wire up.
 <!-- gen:end readme-screenshots -->
 
 ## Quick Start
 
-You need: Node.js >= 20, pnpm >= 10, Python >= 3.12, and a free **[Backblaze B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start)**.
+You need: Node.js >= 20, pnpm >= 10, Python >= 3.12, and a free **[Backblaze B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-totalsegmentator-batch-pipeline)**.
 
 ### Start a new project
 
@@ -52,12 +44,12 @@ cd my-cool-app
 **Option 2: Clone and reinitialize**
 
 ```bash
-git clone https://github.com/backblaze-b2-samples/vibe-coding-starter-kit.git my-cool-app
+git clone https://github.com/backblaze-b2-samples/totalsegmentator-batch-pipeline.git my-cool-app
 cd my-cool-app
 rm -rf .git
 git init
 git add .
-git commit -m "Initial commit from vibe-coding-starter-kit"
+git commit -m "Initial commit from totalsegmentator-batch-pipeline"
 ```
 
 Either way you get a clean project with no upstream history — ready to push to your own repo and point your agent at it.
@@ -83,7 +75,7 @@ existing `.env`.
 
 **2. Add your B2 credentials**
 
-Open `.env` in your editor and keep it visible. Then head to the [Backblaze B2 dashboard](https://secure.backblaze.com/b2_buckets.htm?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start) and:
+Open `.env` in your editor and keep it visible. Then head to the [Backblaze B2 dashboard](https://secure.backblaze.com/b2_buckets.htm?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-totalsegmentator-batch-pipeline) and:
 
 <!-- gen:begin readme-credentials -->
 1. **Create a bucket** and an **application key** with `Read and Write`
@@ -105,9 +97,30 @@ Open `.env` in your editor and keep it visible. Then head to the [Backblaze B2 d
 pnpm dev
 ```
 
-That's it. Frontend at `localhost:3000`, API at `localhost:8000`. Upload a file and see it working. Interactive API docs (Swagger UI) are at `localhost:8000/docs`, with ReDoc at `/redoc`.
+That's it. Frontend at `localhost:3000`, API at `localhost:8000`. Ingest a NIfTI volume on the Upload page, create a study, and segment it. Interactive API docs (Swagger UI) are at `localhost:8000/docs`, with ReDoc at `/redoc`.
 
 `pnpm dev` runs the preflight check first — it catches the common setup gotchas (wrong Node/Python version, missing venv, missing or placeholder `.env`, ports already taken) and tells you exactly how to fix each one. Run it standalone any time with `pnpm run doctor`.
+
+### Running segmentation (the ML extension)
+
+The core install is deliberately light: `pnpm run setup` installs only the
+credential-free API + web stack, so `pnpm dev`, `pnpm verify` and CI stay fast.
+The actual segmentation engine — TotalSegmentator, PyTorch, nnU-Net, nibabel —
+is a **separate optional extension** in
+[`services/api/requirements-ml.txt`](services/api/requirements-ml.txt), lazily
+imported in `services/api/app/repo/segmentation.py`. Install it on a CUDA or CPU
+host to run real segmentation:
+
+```bash
+services/api/.venv/bin/pip install -r services/api/requirements-ml.txt
+```
+
+Without it the app still runs and everything except the segmentation step works;
+a segment run on a clone without the stack is recorded as `failed` with the
+install hint (it never 500s). Device selection is automatic — CUDA GPU if
+present, otherwise CPU. Set `TS_DEVICE` to force `cpu`, `gpu`, or `mps` (Apple
+MPS is opt-in, since nnU-Net MPS support is weak). TotalSegmentator downloads its
+own Apache-2.0 model weights on first use — no Hugging Face token needed.
 
 ### Supported local environments
 
@@ -120,37 +133,46 @@ port-fallback, and IPv6 behavior.
 
 ## When to use
 
-Use this repository as a template or sample implementation when you want to
-clone or fork a working file-management dashboard, connect it to your own B2
-bucket, and then rebrand and extend it for your application. It provides
-production-minded engineering controls—including strict architecture,
-contract checks, tests, linting, and deployment runbooks—so you can begin with
-a dependable scaffold instead of a blank prototype.
+Use this repository when you want a working, batch medical-imaging segmentation
+pipeline backed entirely by Backblaze B2: ingest raw CT/MRI volumes, run
+TotalSegmentator locally to produce 100+ structure masks plus per-structure
+volumetric statistics, and write the derived artifacts back to B2 keyed by study.
+It is a strong starting point for radiologists, medical-AI researchers and
+clinical data teams building a scalable segmented imaging dataset, and it
+demonstrates the **write-amplification** storage pattern — each source volume
+yields comparable-size derived data — with real, production-minded engineering
+controls (strict architecture, contract checks, tests, linting, a Railway
+runbook).
 
 ## When not to use
 
-Do not choose this repository expecting a complete hosted SaaS product or a
-drop-in production service. It does not provide managed hosting, user accounts,
-authentication, tenant isolation, billing, or on-call operations. Before using
-an adapted application in production, you own its product-specific security,
-operations, capacity, compliance, and support decisions.
+This is a sample, not a medical device or a hosted service. Do not use it for
+clinical diagnosis, and never feed it real, identifiable patient data — it has no
+authentication, no tenant isolation, no PHI handling, and no hosted operations.
+It expects synthetic phantoms or de-identified volumes. Before adapting it toward
+any production use, you own its product-specific security, operations, capacity,
+regulatory/compliance, and support decisions.
 
 ## Why Backblaze B2?
 
-[Backblaze B2](https://www.backblaze.com/cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start) is the object storage this kit is built around — a deliberate default, not just a demo backend:
+[Backblaze B2](https://www.backblaze.com/cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-totalsegmentator-batch-pipeline) is the object storage this kit is built around — a deliberate default, not just a demo backend:
 
-- **S3-compatible API.** B2 speaks the S3 API, so the `boto3` calls, SDKs, and tooling you already use for AWS S3 work unchanged — you just point them at B2's endpoint. This kit uses the S3-compatible API throughout (isolated in `services/api/app/repo/`), so nothing is locked to a proprietary client.
-- **Built for data-heavy apps.** B2 storage runs at a fraction of hyperscaler pricing with generous free egress to many CDN and compute partners — what you want when an AI app accumulates uploads, datasets, model artifacts, and generated media.
-- **Free to start.** A [free B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start) is enough to run everything in this repo.
+- **S3-compatible API.** B2 speaks the S3 API, so the `boto3` calls, SDKs, and tooling you already use for AWS S3 work unchanged — you just point them at B2's endpoint. This app uses the S3-compatible API throughout (isolated in `services/api/app/repo/`), so nothing is locked to a proprietary client.
+- **Built for data-heavy, write-amplified workloads.** Each 100–500 MB source volume yields a comparable-size mask plus a stats JSON, so a PACS-scale archive fills B2 with terabytes of derived data. B2 storage runs at a fraction of hyperscaler pricing with generous free egress — exactly what an imaging dataset that keeps growing needs.
+- **B2 is the sole storage layer.** Study records, source volumes, masks and stats all live as objects under one `studies/` prefix — there is no separate database, and no second API key (segmentation is on-device OSS).
+- **Free to start.** A [free B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-totalsegmentator-batch-pipeline) is enough to run everything in this repo.
 
-## Building Your App
+## Extending this app
 
-When you adapt this kit for a new app, keep the shared scaffolding and only swap out what's app-specific:
+This sample is built on the vibe-coding-starter-kit, so it keeps the kit's shared
+scaffolding and layers the segmentation domain on top. If you fork it to build
+your own imaging (or other) pipeline:
 
 - **Keep** the UI kit (`apps/web/src/components/ui/` + design tokens in `globals.css` + `/design`).
-- **Keep** the File Explorer (`/files`) and Upload (`/upload`) pages and their sidebar nav entries — they're the reusable B2-backed surface.
-- **Adapt** the Dashboard (`/`) to your use case — replace the default stats, chart, and recent uploads with metrics that reflect what your app actually does.
-- **Rebrand** by editing a single file: `apps/web/src/lib/app-config.ts` holds the app name and description (`APP_NAME`, `APP_DESCRIPTION`). Changing them there updates the page title, sidebar, and breadcrumb everywhere — no other files to touch.
+- **Keep** the Bucket Explorer (`/files`) — the non-negotiable full-bucket view — and the Bulk Volume Ingest page (`/upload`), the reusable B2-backed surface.
+- **Study Library** (`/studies`) and the **Dashboard** (`/`) are the app-specific screens; the primary entity is `Study`. Add or change endpoints by editing the FastAPI routers and Pydantic models, then run `pnpm contract:export && pnpm gen:api` — the shared types, route registry and query keys are generated.
+- **Segmentation** lives entirely in `services/api/app/repo/segmentation.py` (the only module importing torch/TotalSegmentator), so you can swap the engine without touching the service or UI layers.
+- **Rebrand** via `apps/web/src/lib/app-config.ts` (`APP_NAME`, `APP_DESCRIPTION`) and `docs/exec-plans/sample.json` + `pnpm gen:docs`.
 
 Full contract and rationale: [AGENTS.md §2 — Shared Scaffolding Contract](AGENTS.md#2-shared-scaffolding-contract).
 
@@ -201,10 +223,12 @@ This approach draws from [OpenAI's experience building with Codex](https://opena
 ## Core Features
 
 <!-- gen:begin readme-core-features -->
-- [File Upload](docs/features/file-upload.md) — drag-and-drop upload with real-time progress
-- [File Browser](docs/features/file-browser.md) — list, preview, download, delete files
-- [Dashboard](docs/features/dashboard.md) — stats cards, upload chart, recent uploads
-- [Metadata Extraction](docs/features/metadata-extraction.md) — image dimensions, EXIF, PDF info, checksums
+- [Study Library](docs/features/studies.md) — browse, create, edit, delete and segment CT/MRI studies
+- [Segmentation](docs/features/segmentation.md) — run TotalSegmentator locally to produce a 100+ structure multi-label mask
+- [Volumetric Stats](docs/features/volumetric-stats.md) — per-structure volume (mL), bounding box and CT Hounsfield stats as JSON
+- [Dashboard](docs/features/dashboard.md) — studies processed, structures segmented, and source-to-derived write amplification
+- [Bulk Volume Ingest](docs/features/file-upload.md) — drag-and-drop bulk upload of NIfTI volumes to the B2 source prefix
+- [Bucket Explorer](docs/features/file-browser.md) — full-bucket browse, preview, download, delete
 - [Settings](docs/features/settings.md) — theme plus labelled demo preference fields
 <!-- gen:end readme-core-features -->
 - [Design System](docs/design-system.md) — tokens, primitives, AI elements, the blaze generating loader, and inline `ErrorState` / `EmptyState` patterns. Live preview at `/design`.
@@ -223,8 +247,9 @@ This approach draws from [OpenAI's experience building with Codex](https://opena
 
 - TypeScript, Next.js 16, React 19, Tailwind v4, shadcn/ui, Recharts
 - TanStack Query — caching, dedup, retry, stale-while-revalidate for every fetch
-- Python 3.12+, FastAPI, boto3, Pydantic v2, Pillow, PyPDF2
-- Backblaze B2 (S3-compatible object storage)
+- Python 3.12+, FastAPI, boto3, Pydantic v2 (core)
+- TotalSegmentator, PyTorch, nnU-Net v2, nibabel, NumPy — the optional ML extension (`services/api/requirements-ml.txt`), lazy-imported and excluded from the core install/verify
+- Backblaze B2 (S3-compatible object storage) — the sole storage layer
 - pnpm workspaces (monorepo)
 
 ## Commands
@@ -259,27 +284,28 @@ For the full command reference (`dev:web`, `dev:api`, `lint`, `test:*`,
 notes, port-fallback behavior, and slow-run recovery, see
 [docs/verification.md](docs/verification.md).
 
-## Deploying to Vercel
+## Deploying
 
-Deploys as **one Vercel project** — the Next.js web app and FastAPI API build
-from the same repo and share one origin (web at `/`, API under `/api`), so
-there's **no CORS and no second URL to wire up**.
+The primary intended use is **local** (`pnpm dev`). For a hosted demo, deploy to
+**Railway**, which can give the API the CPU/GPU and memory segmentation needs.
+
+This app is intentionally **not deployable to Vercel**: segmentation runs
+PyTorch/nnU-Net inference that cannot fit or complete inside a serverless
+function, so a one-click Vercel button would break the "the button deploys the
+whole app" promise. There is no deploy button:
 
 <!-- gen:begin readme-deploy-button -->
-[![Deploy to Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fbackblaze-b2-samples%2Fvibe-coding-starter-kit&project-name=vibe-coding-starter-kit&repository-name=vibe-coding-starter-kit&demo-title=Vibe%20Coding%20Starter%20Kit&demo-description=A%20well-engineered%20full-stack%20foundation%20%E2%80%94%20dashboard%2C%20drag-and-drop%20upload%20and%20a%20file%20browser%20%E2%80%94%20with%20Backblaze%20B2%20storage%20already%20wired%20in%2C%20so%20builders%20skip%20the%20boilerplate%20loop.&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2Fbackblaze-b2-samples%2Fvibe-coding-starter-kit%2Fmain%2Fdocs%2Fimages%2Fb2-starterkit-dashboard1.png&env=B2_APPLICATION_KEY_ID%2CB2_APPLICATION_KEY%2CB2_BUCKET_NAME%2CB2_REGION&envDescription=B2%20credentials%20and%20bucket&envLink=https%3A%2F%2Fgithub.com%2Fbackblaze-b2-samples%2Fvibe-coding-starter-kit%2Fblob%2Fmain%2Finfra%2Fvercel%2FREADME.md)
+_This app does not ship a one-click deploy button._
 <!-- gen:end readme-deploy-button -->
 
-Set your B2 credentials and bucket, and you're live. Uploads go **directly from
-the browser to B2** (presigned PUT), so Vercel's 4.5 MB payload limit doesn't
-apply — you keep the 100 MB default. Two things to know before a real deploy:
+Before a real deploy:
 
-- Your bucket's CORS must allow the deploy origin.
-- The deployed API is unauthenticated and bucket-wide — use a dedicated B2
-  bucket/prefix and key for any preview.
+- Your bucket's CORS must allow the deploy origin (uploads go **directly from the browser to B2** via presigned PUT).
+- The deployed API is unauthenticated and bucket-wide — use a dedicated B2 bucket/prefix and key, and never real patient data.
+- The API host must install the ML extension (`services/api/requirements-ml.txt`) with enough CPU/GPU and memory to run TotalSegmentator.
 
-Full setup — variable reference, the two-Projects alternative, security,
-preview/production, `/health` checks, and rollback — is in the
-[Vercel delivery contract](infra/vercel/README.md).
+Full setup — services, variables, CORS, promotion and rollback — is in the
+[Railway delivery contract](infra/railway/README.md).
 
 ## Documentation Map
 
@@ -288,7 +314,7 @@ preview/production, `/health` checks, and rollback — is in the
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Agent table of contents — start here |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System layout, layering, data flows |
-| [docs/features/](docs/features/) | Feature docs (file upload, file browser, dashboard, metadata extraction, settings) |
+| [docs/features/](docs/features/) | Feature docs (study library, segmentation, volumetric stats, dashboard, bulk volume ingest, bucket explorer, settings) |
 | [docs/design-system.md](docs/design-system.md) | Design tokens, primitives, loader, error/empty states |
 | [docs/app-workflows.md](docs/app-workflows.md) | User journeys |
 | [docs/dev-workflows.md](docs/dev-workflows.md) | Engineering workflows, command index, releases |
@@ -297,15 +323,14 @@ preview/production, `/health` checks, and rollback — is in the
 | [docs/SECURITY.md](docs/SECURITY.md) | Security principles |
 | [docs/RELIABILITY.md](docs/RELIABILITY.md) | Reliability expectations |
 | [docs/api/openapi.json](docs/api/openapi.json) | The checked-in API contract the client seam is generated from |
-| [infra/vercel/README.md](infra/vercel/README.md) | Vercel deployment contract |
 | [infra/railway/README.md](infra/railway/README.md) | Railway delivery contract |
 | [docs/exec-plans/](docs/exec-plans/) | Execution plans, tech debt, and the sample manifest |
 <!-- gen:end readme-doc-map -->
 
 ## FAQ
 
-**What is the Vibe Coding Starter Kit?**
-An open-source, full-stack template (Next.js 16 + FastAPI) with a pre-built dashboard UI, drag-and-drop file upload, and file browser, with [Backblaze B2](https://www.backblaze.com/cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start) cloud storage already integrated. You clone it, connect it to your own B2 bucket, then rebrand and extend it for your app.
+**What is the TotalSegmentator Batch Pipeline?**
+An open-source, full-stack sample (Next.js 16 + FastAPI) that ingests raw 3D CT/MRI volumes to [Backblaze B2](https://www.backblaze.com/cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-totalsegmentator-batch-pipeline), runs TotalSegmentator locally to produce multi-label masks over 100+ anatomical structures plus per-structure volumetric statistics, and writes the derived artifacts back to B2 keyed by study — with B2 as the sole storage layer. It showcases the write-amplification storage pattern at PACS scale.
 
 **Is it free?**
 Yes. The code is MIT-licensed (see [License](#license)), and Backblaze B2 offers a free account to get started.
@@ -325,24 +350,24 @@ Yes. [AGENTS.md](AGENTS.md) is the single source of truth for coding agents, arc
 **What's the tech stack?**
 Frontend: TypeScript, Next.js 16, React 19, Tailwind v4, shadcn/ui, TanStack Query. Backend: Python 3.12+, FastAPI, boto3, Pydantic v2. Storage: Backblaze B2 (S3-compatible). See [Tech Stack](#tech-stack).
 
-**How do I rebrand it for my own app?**
-Edit a single file — `apps/web/src/lib/app-config.ts` (`APP_NAME`, `APP_DESCRIPTION`) — and the page title, sidebar, and breadcrumb update everywhere. See [Building Your App](#building-your-app).
+**How do I rebrand or extend it?**
+Edit `apps/web/src/lib/app-config.ts` (`APP_NAME`, `APP_DESCRIPTION`) and `docs/exec-plans/sample.json` (then `pnpm gen:docs`); the page title, sidebar, docs and generated regions update from there. See [Extending this app](#extending-this-app).
 
 **How do I deploy it?**
-It deploys to Vercel as a single project — the web app and FastAPI API build from the same repo and share one origin (web at `/`, API under `/api`), so there's no CORS or second URL to wire up. A Railway path is also documented. Deploying is always a human-approved action — see [Deploying to Vercel](#deploying-to-vercel).
+It is designed to run locally (`pnpm dev`); for a hosted demo, deploy to Railway on a host with enough CPU/GPU and memory for TotalSegmentator. It is intentionally not deployable to Vercel — serverless functions can't run the PyTorch/nnU-Net inference. Deploying is always a human-approved action — see [Deploying](#deploying).
 
 **Does it work on Windows?**
 Local scripts are supported on macOS, Linux, and WSL2. Native Windows is not supported yet — use WSL2 on Windows.
 
 **Where do I get help or report bugs?**
-Report repository defects and feature requests through [GitHub Issues](https://github.com/backblaze-b2-samples/vibe-coding-starter-kit/issues). For B2 account, billing, service, or API help, use [Backblaze Support](https://www.backblaze.com/help).
+Report repository defects and feature requests through [GitHub Issues](https://github.com/backblaze-b2-samples/totalsegmentator-batch-pipeline/issues). For B2 account, billing, service, or API help, use [Backblaze Support](https://www.backblaze.com/help).
 
 ## Maintenance and support
 
 Backblaze maintains this open-source template/sample to help developers get
 started with B2. Production use is possible with caution and requires your own
 validation. Report repository defects and feature requests through
-[GitHub Issues](https://github.com/backblaze-b2-samples/vibe-coding-starter-kit/issues);
+[GitHub Issues](https://github.com/backblaze-b2-samples/totalsegmentator-batch-pipeline/issues);
 for B2 account, billing, service, or API help, use
 [Backblaze Support](https://www.backblaze.com/help). This template/sample is
 not covered by the Backblaze service level agreement, and no SLA is provided

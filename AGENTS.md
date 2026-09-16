@@ -18,7 +18,6 @@ packages/shared/   Shared TypeScript types, generated from the API contract
 docs/              System of record (features, workflows, security, reliability)
 docs/exec-plans/   Execution plans, tech debt, and sample.json (the gen:docs input)
 scripts/gen/       Generator policy: API naming, sample-manifest schema
-infra/vercel/      Vercel deployment contract
 infra/railway/     Railway delivery contract (per-service railway.json at their service roots)
 ```
 <!-- gen:end agents-repo-map -->
@@ -225,7 +224,6 @@ If documentation and implementation conflict, update docs in the same PR. Docume
 | The API contract itself | [docs/api/openapi.json](docs/api/openapi.json) |
 | Execution plans | [docs/exec-plans/](docs/exec-plans/) |
 | Tech debt | [docs/exec-plans/tech-debt-tracker.md](docs/exec-plans/tech-debt-tracker.md) |
-| Deploying to vercel | [infra/vercel/README.md](infra/vercel/README.md) |
 | Deploying to railway | [infra/railway/README.md](infra/railway/README.md) |
 <!-- gen:end agents-doc-map -->
 

@@ -1,6 +1,73 @@
 {
   "components": {
     "schemas": {
+      "CreateStudyRequest": {
+        "description": "Create a study from an already-ingested source volume.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "fast": {
+            "default": true,
+            "title": "Fast",
+            "type": "boolean"
+          },
+          "modality": {
+            "enum": [
+              "CT",
+              "MRI"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "patient_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patient Label"
+          },
+          "source_key": {
+            "description": "Key of an ingested volume from GET /studies/sources.",
+            "title": "Source Key",
+            "type": "string"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "task": {
+            "enum": [
+              "total",
+              "total_mr",
+              "lung_vessels",
+              "body"
+            ],
+            "title": "Task",
+            "type": "string"
+          }
+        },
+        "required": [
+          "study_id",
+          "modality",
+          "task",
+          "source_key"
+        ],
+        "title": "CreateStudyRequest",
+        "type": "object"
+      },
       "DailyUploadCount": {
         "description": "One day's upload count, for the dashboard activity chart.",
         "properties": {
@@ -37,6 +104,30 @@
           "key"
         ],
         "title": "DeleteFileResponse",
+        "type": "object"
+      },
+      "DeleteStudyResponse": {
+        "description": "Acknowledge deletion of a study and every object under its prefix.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "objects_deleted": {
+            "title": "Objects Deleted",
+            "type": "integer"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deleted",
+          "study_id",
+          "objects_deleted"
+        ],
+        "title": "DeleteStudyResponse",
         "type": "object"
       },
       "FileMetadata": {
@@ -461,6 +552,508 @@
         "title": "PresignUploadResponse",
         "type": "object"
       },
+      "SegmentRequest": {
+        "description": "Kick off (or re-run) segmentation, optionally overriding create-time choices.",
+        "properties": {
+          "fast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fast"
+          },
+          "roi_subset": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Limit segmentation to these structure names.",
+            "title": "Roi Subset"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "enum": [
+                  "total",
+                  "total_mr",
+                  "lung_vessels",
+                  "body"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          }
+        },
+        "title": "SegmentRequest",
+        "type": "object"
+      },
+      "SegmentationStats": {
+        "description": "Dashboard aggregates \u2014 the write-amplification headline metric.",
+        "properties": {
+          "amplification_ratio": {
+            "description": "derived_bytes_total / source_bytes_total across all done studies.",
+            "title": "Amplification Ratio",
+            "type": "number"
+          },
+          "derived_bytes_total": {
+            "title": "Derived Bytes Total",
+            "type": "integer"
+          },
+          "derived_bytes_total_human": {
+            "title": "Derived Bytes Total Human",
+            "type": "string"
+          },
+          "source_bytes_total": {
+            "title": "Source Bytes Total",
+            "type": "integer"
+          },
+          "source_bytes_total_human": {
+            "title": "Source Bytes Total Human",
+            "type": "string"
+          },
+          "structures_segmented": {
+            "title": "Structures Segmented",
+            "type": "integer"
+          },
+          "studies_done": {
+            "title": "Studies Done",
+            "type": "integer"
+          },
+          "studies_total": {
+            "title": "Studies Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "studies_total",
+          "studies_done",
+          "structures_segmented",
+          "source_bytes_total",
+          "source_bytes_total_human",
+          "derived_bytes_total",
+          "derived_bytes_total_human",
+          "amplification_ratio"
+        ],
+        "title": "SegmentationStats",
+        "type": "object"
+      },
+      "SourceObject": {
+        "description": "An ingested-but-unassigned NIfTI volume, offered in the create picker.",
+        "properties": {
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "size_human": {
+            "title": "Size Human",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "filename",
+          "size_bytes",
+          "size_human",
+          "uploaded_at"
+        ],
+        "title": "SourceObject",
+        "type": "object"
+      },
+      "StructureStat": {
+        "description": "Volumetrics for one segmented anatomical structure.",
+        "properties": {
+          "bbox": {
+            "description": "Voxel bounding box [x_min, x_max, y_min, y_max, z_min, z_max].",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Bbox",
+            "type": "array"
+          },
+          "hu_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean CT Hounsfield value inside the structure (CT only).",
+            "title": "Hu Mean"
+          },
+          "hu_std": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Std dev of CT Hounsfield values inside the structure (CT only).",
+            "title": "Hu Std"
+          },
+          "label_id": {
+            "description": "Integer label in the multi-label mask.",
+            "title": "Label Id",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Structure name from the TotalSegmentator class map.",
+            "title": "Name",
+            "type": "string"
+          },
+          "volume_ml": {
+            "description": "Structure volume in millilitres (voxels x voxel volume).",
+            "title": "Volume Ml",
+            "type": "number"
+          },
+          "voxel_count": {
+            "title": "Voxel Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label_id",
+          "name",
+          "voxel_count",
+          "volume_ml",
+          "bbox",
+          "hu_mean",
+          "hu_std"
+        ],
+        "title": "StructureStat",
+        "type": "object"
+      },
+      "Study": {
+        "description": "One CT/MRI study and the state of its segmentation run.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "derived_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mask + stats bytes written back to B2 (the amplified side).",
+            "title": "Derived Bytes"
+          },
+          "derived_bytes_human": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived Bytes Human"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Failure reason, set only when status is failed.",
+            "title": "Error"
+          },
+          "fast": {
+            "description": "Ran/will run at 3 mm (fast) rather than full 1.5 mm resolution.",
+            "title": "Fast",
+            "type": "boolean"
+          },
+          "mask_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "B2 key of the multi-label mask, once segmentation is done.",
+            "title": "Mask Key"
+          },
+          "modality": {
+            "enum": [
+              "CT",
+              "MRI"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "patient_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Non-identifying label (e.g. a phantom or cohort code). Never real PHI.",
+            "title": "Patient Label"
+          },
+          "source_bytes": {
+            "description": "Size of the source volume in bytes.",
+            "title": "Source Bytes",
+            "type": "integer"
+          },
+          "source_bytes_human": {
+            "title": "Source Bytes Human",
+            "type": "string"
+          },
+          "source_key": {
+            "description": "B2 key of the raw source volume under this study's prefix.",
+            "title": "Source Key",
+            "type": "string"
+          },
+          "stats_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "B2 key of the per-structure stats JSON, once computed.",
+            "title": "Stats Key"
+          },
+          "status": {
+            "description": "pending (created) -> running (segmenting) -> done | failed.",
+            "enum": [
+              "pending",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "structure_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Number of anatomical structures found in the mask.",
+            "title": "Structure Count"
+          },
+          "study_id": {
+            "description": "Stable identifier; the object-key prefix under studies/.",
+            "title": "Study Id",
+            "type": "string"
+          },
+          "task": {
+            "enum": [
+              "total",
+              "total_mr",
+              "lung_vessels",
+              "body"
+            ],
+            "title": "Task",
+            "type": "string"
+          }
+        },
+        "required": [
+          "study_id",
+          "modality",
+          "task",
+          "status",
+          "fast",
+          "source_key",
+          "mask_key",
+          "stats_key",
+          "structure_count",
+          "source_bytes",
+          "source_bytes_human",
+          "derived_bytes",
+          "derived_bytes_human",
+          "created_at",
+          "description",
+          "patient_label",
+          "error"
+        ],
+        "title": "Study",
+        "type": "object"
+      },
+      "StudyDetail": {
+        "description": "A study plus short-lived presigned download URLs and its computed stats.",
+        "properties": {
+          "mask_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Presigned GET for the mask, if present.",
+            "title": "Mask Url"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Presigned GET for the source volume.",
+            "title": "Source Url"
+          },
+          "stats": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudyStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "study": {
+            "$ref": "#/components/schemas/Study"
+          }
+        },
+        "required": [
+          "study",
+          "source_url",
+          "mask_url",
+          "stats"
+        ],
+        "title": "StudyDetail",
+        "type": "object"
+      },
+      "StudyStats": {
+        "description": "Per-structure volumetrics plus study-level totals.",
+        "properties": {
+          "structure_count": {
+            "title": "Structure Count",
+            "type": "integer"
+          },
+          "structures": {
+            "items": {
+              "$ref": "#/components/schemas/StructureStat"
+            },
+            "title": "Structures",
+            "type": "array"
+          },
+          "total_volume_ml": {
+            "title": "Total Volume Ml",
+            "type": "number"
+          },
+          "voxel_spacing_mm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Voxel size [x, y, z] in mm, from the mask header.",
+            "title": "Voxel Spacing Mm"
+          }
+        },
+        "required": [
+          "structures",
+          "structure_count",
+          "total_volume_ml",
+          "voxel_spacing_mm"
+        ],
+        "title": "StudyStats",
+        "type": "object"
+      },
+      "UpdateStudyRequest": {
+        "description": "Edit a study's descriptive metadata (create-time fields are read-only).",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "patient_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patient Label"
+          }
+        },
+        "title": "UpdateStudyRequest",
+        "type": "object"
+      },
       "UploadStats": {
         "description": "Aggregate bucket figures behind the dashboard stat cards.",
         "properties": {
@@ -552,8 +1145,8 @@
     }
   },
   "info": {
-    "description": "Local API for the Vibe Coding Starter Kit template, providing file upload and management backed by Backblaze B2. This contract documents the template's local API, not a hosted public endpoint.",
-    "title": "Vibe Coding Starter Kit API",
+    "description": "Local API for the TotalSegmentator Batch Pipeline: ingests CT/MRI volumes to Backblaze B2, runs TotalSegmentator to produce multi-label masks plus per-structure volumetric statistics, and writes the derived artifacts back to B2. This contract documents the app's local API, not a hosted public endpoint.",
+    "title": "TotalSegmentator Batch Pipeline API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
@@ -1099,6 +1692,406 @@
         "summary": "Metrics",
         "tags": [
           "metrics"
+        ]
+      }
+    },
+    "/studies": {
+      "get": {
+        "operationId": "list_studies_endpoint_studies_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Study"
+                  },
+                  "title": "Response List Studies Endpoint Studies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Studies Endpoint",
+        "tags": [
+          "studies"
+        ]
+      },
+      "post": {
+        "operationId": "create_study_endpoint_studies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStudyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Study"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Study Endpoint",
+        "tags": [
+          "studies"
+        ]
+      }
+    },
+    "/studies/sources": {
+      "get": {
+        "operationId": "list_sources_endpoint_studies_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourceObject"
+                  },
+                  "title": "Response List Sources Endpoint Studies Sources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Sources Endpoint",
+        "tags": [
+          "studies"
+        ]
+      }
+    },
+    "/studies/stats": {
+      "get": {
+        "operationId": "segmentation_stats_endpoint_studies_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentationStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Segmentation Stats Endpoint",
+        "tags": [
+          "studies"
+        ]
+      }
+    },
+    "/studies/{study_id}": {
+      "delete": {
+        "operationId": "delete_study_endpoint_studies__study_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteStudyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Study Endpoint",
+        "tags": [
+          "studies"
+        ]
+      },
+      "get": {
+        "operationId": "get_study_endpoint_studies__study_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Study Endpoint",
+        "tags": [
+          "studies"
+        ]
+      },
+      "patch": {
+        "operationId": "update_study_endpoint_studies__study_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStudyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Study"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Study Endpoint",
+        "tags": [
+          "studies"
+        ]
+      }
+    },
+    "/studies/{study_id}/mask/download": {
+      "get": {
+        "operationId": "mask_download_endpoint_studies__study_id__mask_download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUrlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mask Download Endpoint",
+        "tags": [
+          "studies"
+        ]
+      }
+    },
+    "/studies/{study_id}/segment": {
+      "post": {
+        "operationId": "segment_study_endpoint_studies__study_id__segment_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SegmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Study"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Segment Study Endpoint",
+        "tags": [
+          "studies"
+        ]
+      }
+    },
+    "/studies/{study_id}/source/download": {
+      "get": {
+        "operationId": "source_download_endpoint_studies__study_id__source_download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUrlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Source Download Endpoint",
+        "tags": [
+          "studies"
         ]
       }
     },

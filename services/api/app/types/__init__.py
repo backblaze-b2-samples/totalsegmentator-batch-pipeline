@@ -8,6 +8,18 @@ from app.types.files import (
 )
 from app.types.health import HealthStatus
 from app.types.stats import DailyUploadCount, UploadStats
+from app.types.studies import (
+    CreateStudyRequest,
+    DeleteStudyResponse,
+    SegmentationStats,
+    SegmentRequest,
+    SourceObject,
+    StructureStat,
+    Study,
+    StudyDetail,
+    StudyStats,
+    UpdateStudyRequest,
+)
 from app.types.upload import (
     FileUploadResponse,
     PresignUploadRequest,
@@ -16,8 +28,10 @@ from app.types.upload import (
 )
 
 __all__ = [
+    "CreateStudyRequest",
     "DailyUploadCount",
     "DeleteFileResponse",
+    "DeleteStudyResponse",
     "ErrorResponse",
     "FileMetadata",
     "FileMetadataDetail",
@@ -27,6 +41,14 @@ __all__ = [
     "PresignUploadRequest",
     "PresignUploadResponse",
     "ResponseModel",
+    "SegmentRequest",
+    "SegmentationStats",
+    "SourceObject",
+    "StructureStat",
+    "Study",
+    "StudyDetail",
+    "StudyStats",
+    "UpdateStudyRequest",
     "UploadStats",
     "VerifyUploadRequest",
 ]

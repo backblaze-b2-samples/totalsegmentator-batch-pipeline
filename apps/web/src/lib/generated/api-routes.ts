@@ -11,7 +11,7 @@
 
 /** The verbs this app's routes actually use, narrowed from the contract. */
 export type ApiClientRoute = {
-  method: "delete" | "get" | "post";
+  method: "delete" | "get" | "patch" | "post";
   path: string;
 };
 
@@ -24,6 +24,7 @@ export type ApiClientRoute = {
 export const API_CLIENT_ROUTES = {
   fileByKeyDelete: { method: "delete", path: "/files-by-key" },
   legacyFileDelete: { method: "delete", path: "/files/{key}" },
+  studyDelete: { method: "delete", path: "/studies/{study_id}" },
   files: { method: "get", path: "/files" },
   fileByKeyDetail: { method: "get", path: "/files-by-key/detail" },
   fileByKeyDownload: { method: "get", path: "/files-by-key/download" },
@@ -35,6 +36,15 @@ export const API_CLIENT_ROUTES = {
   fileStats: { method: "get", path: "/files/stats" },
   uploadActivity: { method: "get", path: "/files/stats/activity" },
   health: { method: "get", path: "/health" },
+  studies: { method: "get", path: "/studies" },
+  study: { method: "get", path: "/studies/{study_id}" },
+  studyMaskDownload: { method: "get", path: "/studies/{study_id}/mask/download" },
+  studySourceDownload: { method: "get", path: "/studies/{study_id}/source/download" },
+  studySources: { method: "get", path: "/studies/sources" },
+  studySegmentationStats: { method: "get", path: "/studies/stats" },
+  studyUpdate: { method: "patch", path: "/studies/{study_id}" },
+  studyCreate: { method: "post", path: "/studies" },
+  studySegment: { method: "post", path: "/studies/{study_id}/segment" },
   uploadPresign: { method: "post", path: "/upload/presign" },
   uploadVerify: { method: "post", path: "/upload/verify" },
 } as const satisfies Record<string, ApiClientRoute>;

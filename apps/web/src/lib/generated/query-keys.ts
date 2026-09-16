@@ -28,4 +28,8 @@ export const qk = {
   stats: () => [...qk.all, "stats"] as const,
   uploadActivity: (days?: number) => [...qk.all, "stats", "activity", days ?? 7] as const,
   health: () => [...qk.all, "health"] as const,
+  studies: (limit?: number) => [...qk.all, "studies", limit ?? 100] as const,
+  study: () => [...qk.all, "studies", "detail"] as const,
+  studySources: () => [...qk.all, "studies", "sources"] as const,
+  segmentationStats: () => [...qk.all, "studies", "stats"] as const,
 };

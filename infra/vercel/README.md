@@ -71,7 +71,8 @@ Set values in the Vercel Project and environment. Never put values in
 | `B2_REGION` | Non-secret configuration | the region inside the bucket's **Endpoint** (`s3.<region>.backblazeb2.com`); the S3 endpoint is derived from it. |
 | `B2_PUBLIC_URL_BASE` | Non-secret configuration | public object base URL, when the bucket is public. |
 | `NEXT_PUBLIC_API_URL` | Public build-time configuration | separate-origin deploys only; Next.js inlines it at build time. |
-| `ENABLE_DOCS`, `ALLOWED_KEY_PREFIX` | Non-secret configuration | Set `ENABLE_DOCS=false` in production. `ALLOWED_KEY_PREFIX=uploads/` confines key operations when the bucket is shared. |
+| `TS_DEVICE` | Non-secret configuration | segmentation device override: auto|cpu|gpu|mps (default auto — CUDA, then CPU; MPS is opt-in as nnU-Net support is weak). |
+| `ENABLE_DOCS`, `ALLOWED_KEY_PREFIX` | Non-secret configuration | Set `ENABLE_DOCS=false` in production. `ALLOWED_KEY_PREFIX=studies/` confines key operations when the bucket is shared. |
 | `MAX_FILE_SIZE` | Optional configuration | Uploads go directly to B2 (presigned PUT), so the platform's Function payload limit no longer applies — leave at the default or set your own cap. |
 | `WARM_LIST_CACHE_ON_STARTUP=false` | Recommended on this platform | Avoid an expensive full B2 scan on each cold start. |
 | `DOWNLOAD_COUNT_FILE=/tmp/download_count.json` | Optional ephemeral configuration | Lets a warm Function instance write the counter, but it is not durable or shared. |
@@ -139,12 +140,14 @@ repo-root `vercel.json` and creates one Services project:
 
 Alongside `repository-url` and the `env` list, the button carries the
 presentation parameters the clone flow renders in its preview card:
-`project-name` and `repository-name` (both `vibe-coding-starter-kit`, so the cloned repo and
+`project-name` and `repository-name` (both `totalsegmentator-batch-pipeline`, so the cloned repo and
 the created Project get a readable default name), plus
-`demo-title`, `demo-description`, `demo-image`.
+`demo-title`, `demo-description`.
 
-`demo-image` points at `docs/images/b2-starterkit-dashboard1.png`, resolved against this
-repository's default branch.
+There is no `demo-image`: this repository ships no screenshots yet, and a
+button parameter pointing at a file that does not exist renders a broken
+card. Add entries to `docs/exec-plans/sample.json` `screenshots` and re-run
+`pnpm gen:docs` to include one.
 
 There is no `demo-url`: this repository hosts no public demo deployment, and
 the API is unauthenticated and bucket-wide (see

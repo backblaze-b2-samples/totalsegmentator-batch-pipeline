@@ -82,6 +82,28 @@ def test_boto3_only_in_repo():
     assert violations == [], "boto3 boundary violations:\n" + "\n".join(violations)
 
 
+# The imaging / ML stack (requirements-ml.txt) is heavy and lazy-imported. It
+# must stay confined to these two repo modules so `pnpm verify` (a venv without
+# that stack) never imports it and the boot path stays light.
+ML_MODULE_ROOTS = ("torch", "totalsegmentator", "nnunetv2", "nibabel")
+ML_ALLOWED_FILES = {"repo/segmentation.py", "repo/nifti_stats.py"}
+
+
+def test_ml_stack_only_in_segmentation_modules():
+    """torch / TotalSegmentator / nnU-Net / nibabel imported only in the two
+    designated repo modules, and lazily (inside functions)."""
+    violations = []
+    for pyfile in _get_python_files(APP_ROOT):
+        rel = pyfile.relative_to(APP_ROOT).as_posix()
+        if rel in ML_ALLOWED_FILES:
+            continue
+        for imp in _get_imports(pyfile):
+            root = imp.split(".")[0]
+            if root in ML_MODULE_ROOTS:
+                violations.append(f"app/{rel}: imports ML module '{imp}' outside the engine layer")
+    assert violations == [], "ML containment violations:\n" + "\n".join(violations)
+
+
 def test_api_app_python_file_size_limit():
     """Verify authored Python under services/api/app stays within 300 lines."""
     violations = []

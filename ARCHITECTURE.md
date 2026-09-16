@@ -4,17 +4,19 @@
 ## Components
 
 <!-- gen:begin arch-components -->
-A well-engineered full-stack foundation — dashboard, drag-and-drop upload and a file browser — with Backblaze B2 storage already wired in, so builders skip the boilerplate loop.
+A batch medical-imaging pipeline that ingests raw 3D CT/MRI volumes to Backblaze B2, runs TotalSegmentator locally to produce multi-label masks covering 100+ anatomical structures plus per-structure volumetric statistics, and writes the masks and stats back to a B2 derived prefix — building a scalable segmented imaging dataset with B2 as the sole storage layer.
 
 - **apps/web/** — Next.js 16, React 19, Tailwind v4, shadcn/ui, TanStack Query, Recharts
-  - File Upload (`/upload`) — drag-and-drop upload with real-time progress
-  - File Browser (`/files`) — list, preview, download, delete files
-  - Dashboard (`/`) — stats cards, upload chart, recent uploads
+  - Study Library (`/studies`) — browse, create, edit, delete and segment CT/MRI studies
+  - Dashboard (`/`) — studies processed, structures segmented, and source-to-derived write amplification
+  - Bulk Volume Ingest (`/upload`) — drag-and-drop bulk upload of NIfTI volumes to the B2 source prefix
+  - Bucket Explorer (`/files`) — full-bucket browse, preview, download, delete
   - Settings (`/settings`) — theme plus labelled demo preference fields
-- **services/api/** — FastAPI, Python 3.12+, boto3, Pydantic v2, Pillow, PyPDF2
+- **services/api/** — FastAPI, Python 3.12+, boto3, Pydantic v2, TotalSegmentator, nibabel, NumPy
   - REST API for every operation the frontend consumes, exported to `docs/api/openapi.json`
   - Backblaze B2 (S3-compatible API) access isolated in the `repo/` layer
-  - Metadata Extraction — image dimensions, EXIF, PDF info, checksums
+  - Segmentation — run TotalSegmentator locally to produce a 100+ structure multi-label mask
+  - Volumetric Stats — per-structure volume (mL), bounding box and CT Hounsfield stats as JSON
   - Structured JSON logging with request tracing, plus `/health` and Prometheus `/metrics`
 - **packages/shared/** — TypeScript types generated from the API contract by `pnpm gen:api`, consumed by `apps/web/` as a workspace dependency (pnpm workspaces)
 <!-- gen:end arch-components -->
@@ -64,32 +66,29 @@ services/api/
 
 - **No external SDK leakage**: `boto3` is only imported in `app/repo/`. All other layers interact with B2 through the repo interface.
 - **No raw dicts at boundaries**: All data crossing layer boundaries uses typed Pydantic models.
-- **No cross-layer mutable state**: Configuration is read-only after init, and no mutable state is shared *between* layers. Intra-layer caches/counters (the listing cache in `repo/list_cache.py`, the B2 connectivity cache in `repo/b2_client.py`, the download counter in `repo/counter.py`, the rate-limit and metrics state in `runtime/`) are module-local and guarded by a `threading.Lock`. The listing cache also owns the only background thread in the app: a stale entry is served immediately while that thread re-scans (stale-while-revalidate), and `main.lifespan` warms it once at startup so no user pays for the cold full-bucket scan.
-- **Validated inputs**: All HTTP inputs validated by FastAPI/Pydantic. File keys reject empty and path-traversal patterns; optional prefix confinement via `ALLOWED_KEY_PREFIX` (off by default).
+- **No cross-layer mutable state**: Configuration is read-only after init, and no mutable state is shared *between* layers. Intra-layer caches/counters (the listing cache in `repo/list_cache.py`, the B2 connectivity cache in `repo/b2_client.py`, the download counter in `repo/counter.py`, the rate-limit and metrics state in `runtime/`) are module-local and guarded by a `threading.Lock`. Two kinds of background thread exist: the listing cache's stale-while-revalidate re-scan (warmed once by `main.lifespan`), and a per-run **segmentation worker** thread started by `service/studies.py` — the study's status/state is the durable coordination point (persisted in B2 as `record.json`), so no in-process mutable state is shared. A daemon segmentation thread can be lost on shutdown mid-run; a production deployment would move it to a task queue.
+- **Engine containment**: torch / TotalSegmentator / nnU-Net / nibabel are imported only in `repo/segmentation.py` and `repo/nifti_stats.py`, lazily, and a structural test (`tests/test_structure.py`) enforces it — so the core install and `pnpm verify` never load the ML stack.
+- **Validated inputs**: All HTTP inputs validated by FastAPI/Pydantic. File keys reject empty and path-traversal patterns; `study_id` is validated to a safe slug; optional prefix confinement via `ALLOWED_KEY_PREFIX` (off by default so the full-bucket Explorer works).
 
 ## Deployment
 
 - **Local dev** — `pnpm dev` runs both services via `concurrently`
   - Web: `localhost:3000`
   - API: `localhost:8000`
-- **Railway** — two services from the same repository: `web` builds from the
-  repository root because it consumes `packages/shared`; `api` builds from
-  `services/api`. Each service's versioned config sits at its own root —
-  `railway.json` and `services/api/railway.json` — the default path Railway
-  discovers, so a one-click template deploy inherits the same build, start, and
-  health behavior with nothing to configure by hand. The human-approved
-  staging/production contract lives in [infra/railway/README.md](infra/railway/README.md).
-- **Vercel** — one project using [Vercel Services](https://vercel.com/docs/services):
-  the `web` (Next.js) and `api` (FastAPI) services build from the same repo and
-  share one origin — the web app at `/`, the API under `/api`. The repo-root
-  `vercel.json` declares both services and routes `/api/*` to the API service;
-  the Vercel-only `services/api/index.py` strips the `/api` prefix so FastAPI
-  keeps its native paths (`/health`, `/files`, …). Uploads go directly from the
-  browser to B2 via a presigned PUT (see
-  [File Upload](docs/features/file-upload.md)), so they bypass the Function's
-  4.5 MB payload ceiling entirely — the bucket must allow the deploy origin in
-  its CORS. A two-separate-Projects alternative and the full delivery contract
-  live in [infra/vercel/README.md](infra/vercel/README.md).
+- **Railway** — the hosted-demo path. Two services from the same repository:
+  `web` builds from the repository root because it consumes `packages/shared`;
+  `api` builds from `services/api`. Each service's versioned config sits at its
+  own root — `railway.json` and `services/api/railway.json` — the default path
+  Railway discovers. The `api` service must additionally install the ML extension
+  (`services/api/requirements-ml.txt`) on a plan with enough CPU/GPU and memory
+  to run TotalSegmentator. The human-approved staging/production contract lives
+  in [infra/railway/README.md](infra/railway/README.md).
+- **Not Vercel** — `deployment_targets` is `["railway"]` and the README ships no
+  Vercel button. Segmentation runs PyTorch/nnU-Net inference that cannot fit or
+  complete inside a serverless function, so a Vercel one-click deploy would break
+  the "the button deploys the whole app" promise. The kit's Vercel entrypoint
+  scaffolding (`vercel.json`, `services/api/index.py`) is left inert but is not a
+  supported deploy target for this app.
 
 External provisioning and deployment remain explicit user-approved actions.
 
@@ -97,22 +96,22 @@ External provisioning and deployment remain explicit user-approved actions.
 
 <!-- gen:begin arch-data-stores -->
 - **Backblaze B2 (S3-compatible API)** — the only data store; there is no application database
-  - Every object this app writes lives under the `uploads/` key prefix of one bucket
+  - Every object this app writes lives under the `studies/` key prefix of one bucket
   - Listing, per-key metadata and presigned URLs all come from the S3 surface below
-  - The primary entity is `FileMetadata`; one file is one object
+  - The primary entity is `Study`; one study is one object
 <!-- gen:end arch-data-stores -->
 
 ## External Services
 
 <!-- gen:begin arch-external-services -->
 - **Backblaze B2 (S3-compatible API)** — reached only through `services/api/app/repo/`, using:
-  - `put_object` — store an uploaded object
-  - `presigned PUT` — the browser uploads bytes directly to B2, bypassing the Function payload cap
-  - `list_objects_v2` — the shared full-bucket listing behind the file list and the stats cards
-  - `head_object` — cheap per-key metadata, and the /health connectivity probe
-  - `get_object` — re-read bytes to recompute rich metadata on demand
-  - `presigned GET` — download and inline preview URLs
-  - `delete_object` — remove an object
+  - `presigned PUT` — the browser bulk-uploads large source volumes directly to B2 (source prefix), bypassing the Function payload cap
+  - `put_object` — write the study record.json and the derived stats.json, and (multipart) the segmentation mask .nii.gz
+  - `list_objects_v2` — the Study Library, the source-volume picker, and the dashboard write-amplification aggregates
+  - `head_object` — cheap per-object sizes for the amplification metric, and the /health connectivity probe
+  - `get_object` — stream the source volume to a local temp file for segmentation, and read the record and stats JSON
+  - `presigned GET` — download and inline-view the mask, source volume, and stats
+  - `delete_object` — remove every object under a study's prefix on delete
 <!-- gen:end arch-external-services -->
 
 ## Trust Boundaries
@@ -125,10 +124,11 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full security documentation.
 
 ## Data Flows
 
-- **Upload**: Browser -> `POST /upload/presign` (API validates the declared file + signs a PUT) -> Browser PUTs bytes **directly to B2** -> `POST /upload/verify` (API HEADs + Range-sniffs the stored object) -> response
-- **List**: Browser -> `GET /files` -> service calls repo -> returns file list
-- **Download**: Browser -> `GET /files/{key}/download` -> service validates key -> repo generates presigned URL -> browser downloads
-- **Delete**: Browser -> `DELETE /files/{key}` -> service validates key -> repo deletes from B2
+- **Ingest**: Browser -> `POST /upload/presign` (API validates the declared volume + signs a PUT) -> Browser PUTs bytes **directly to B2** into `uploads/` -> `POST /upload/verify` (API HEADs + gzip-sniffs the stored object) -> the volume is an unassigned source
+- **Create study**: Browser -> `POST /studies` -> service validates the id, server-side-moves the volume from `uploads/` into `studies/<id>/source/`, and writes `studies/<id>/record.json` (status `pending`)
+- **Segment**: Browser -> `POST /studies/{id}/segment` -> service sets status `running`, returns immediately, and starts a worker thread -> `repo/segmentation.py` streams the source to a temp file, runs TotalSegmentator (`ml=True`), computes volumetrics (`repo/nifti_stats.py`), uploads `segmentation.nii.gz` (multipart) + `stats.json`, and finalizes the record (`done`/`failed`). The UI polls `GET /studies/{id}` while `running`
+- **Dashboard**: Browser -> `GET /studies/stats` -> service aggregates records into source vs derived byte totals and the write-amplification ratio
+- **Explorer**: Browser -> `GET /files` / `GET /files/{key}/download` / `DELETE /files/{key}` -> service validates the key -> repo lists / presigns / deletes across the full bucket
 
 ## Observability
 
@@ -158,6 +158,7 @@ still in step.
 | --- | --- | --- |
 | `DELETE /files-by-key` | `DeleteFileResponse` | `fileByKeyDelete` |
 | `DELETE /files/{key}` | `DeleteFileResponse` | `legacyFileDelete` |
+| `DELETE /studies/{study_id}` | `DeleteStudyResponse` | `studyDelete` |
 | `GET /files` | `FileMetadata[]` | `files` |
 | `GET /files-by-key/detail` | `FileMetadataDetail` | `fileByKeyDetail` |
 | `GET /files-by-key/download` | `FileUrlResponse` | `fileByKeyDownload` |
@@ -170,6 +171,15 @@ still in step.
 | `GET /files/stats/activity` | `DailyUploadCount[]` | `uploadActivity` |
 | `GET /health` | `HealthStatus` | `health` |
 | `GET /metrics` | — | _server-only_ |
+| `GET /studies` | `Study[]` | `studies` |
+| `GET /studies/{study_id}` | `StudyDetail` | `study` |
+| `GET /studies/{study_id}/mask/download` | `FileUrlResponse` | `studyMaskDownload` |
+| `GET /studies/{study_id}/source/download` | `FileUrlResponse` | `studySourceDownload` |
+| `GET /studies/sources` | `SourceObject[]` | `studySources` |
+| `GET /studies/stats` | `SegmentationStats` | `studySegmentationStats` |
+| `PATCH /studies/{study_id}` | `Study` | `studyUpdate` |
+| `POST /studies` | `Study` | `studyCreate` |
+| `POST /studies/{study_id}/segment` | `Study` | `studySegment` |
 | `POST /upload/presign` | `PresignUploadResponse` | `uploadPresign` |
 | `POST /upload/verify` | `FileUploadResponse` | `uploadVerify` |
 <!-- gen:end arch-api-contract -->
@@ -198,16 +208,18 @@ Generated — **never hand-edit**; change the source and re-run the command:
 - `packages/shared/src/generated/api-types.ts` — `pnpm gen:api`
 - `apps/web/src/lib/generated/api-routes.ts` — `pnpm gen:api`
 - `apps/web/src/lib/generated/query-keys.ts` — `pnpm gen:api`
-- The marker-delimited regions of this file, `AGENTS.md`, `README.md` and the 2 `infra/` runbooks — `pnpm gen:docs`
+- The marker-delimited regions of this file, `AGENTS.md`, `README.md` and the 1 `infra/` runbooks — `pnpm gen:docs`
 <!-- gen:end arch-canonical-files -->
 
 ## Core Features
 
 <!-- gen:begin arch-core-features -->
-- [File Upload](docs/features/file-upload.md) — drag-and-drop upload with real-time progress
-- [File Browser](docs/features/file-browser.md) — list, preview, download, delete files
-- [Dashboard](docs/features/dashboard.md) — stats cards, upload chart, recent uploads
-- [Metadata Extraction](docs/features/metadata-extraction.md) — image dimensions, EXIF, PDF info, checksums
+- [Study Library](docs/features/studies.md) — browse, create, edit, delete and segment CT/MRI studies
+- [Segmentation](docs/features/segmentation.md) — run TotalSegmentator locally to produce a 100+ structure multi-label mask
+- [Volumetric Stats](docs/features/volumetric-stats.md) — per-structure volume (mL), bounding box and CT Hounsfield stats as JSON
+- [Dashboard](docs/features/dashboard.md) — studies processed, structures segmented, and source-to-derived write amplification
+- [Bulk Volume Ingest](docs/features/file-upload.md) — drag-and-drop bulk upload of NIfTI volumes to the B2 source prefix
+- [Bucket Explorer](docs/features/file-browser.md) — full-bucket browse, preview, download, delete
 - [Settings](docs/features/settings.md) — theme plus labelled demo preference fields
 <!-- gen:end arch-core-features -->
 
@@ -217,6 +229,5 @@ Generated — **never hand-edit**; change the source and re-run the command:
 - [docs/SECURITY.md](docs/SECURITY.md) — security principles and implementation
 - [docs/RELIABILITY.md](docs/RELIABILITY.md) — reliability expectations
 - [AGENTS.md](AGENTS.md) — architectural invariants and agent instructions
-- [infra/vercel/README.md](infra/vercel/README.md) — Vercel deployment contract
 - [infra/railway/README.md](infra/railway/README.md) — Railway delivery contract
 <!-- gen:end arch-references -->

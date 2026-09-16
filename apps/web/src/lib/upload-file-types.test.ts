@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { ACCEPTED_FILE_TYPES } from "./upload-file-types";
 
-// Mirror of the backend `ALLOWED_TYPES` set in
-// services/api/app/service/upload.py. The dropzone allow-list must stay in
-// lockstep with what the server accepts; this fails loudly if either drifts.
+// The backend `ALLOWED_TYPES` set in services/api/app/service/upload.py. This
+// app's Bulk Volume Ingest dropzone accepts a strict SUBSET of it — NIfTI
+// volumes only (`application/gzip`) — because the ingest page is dedicated to
+// raw CT/MRI volumes. The backend still allow-lists the kit's generic types for
+// its own upload/verify tests, so the check is subset + presence, not equality.
 const BACKEND_ALLOWED_TYPES = [
   "image/jpeg",
   "image/png",
@@ -30,13 +32,19 @@ const BACKEND_ALLOWED_TYPES = [
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "video/quicktime",
   "video/webm",
+  "application/gzip",
 ];
 
 describe("ACCEPTED_FILE_TYPES", () => {
-  it("covers exactly the backend allow-list", () => {
-    expect(new Set(Object.keys(ACCEPTED_FILE_TYPES))).toEqual(
-      new Set(BACKEND_ALLOWED_TYPES)
-    );
+  it("is a subset of the backend allow-list", () => {
+    const backend = new Set(BACKEND_ALLOWED_TYPES);
+    for (const type of Object.keys(ACCEPTED_FILE_TYPES)) {
+      expect(backend.has(type)).toBe(true);
+    }
+  });
+
+  it("accepts NIfTI volumes (application/gzip)", () => {
+    expect(ACCEPTED_FILE_TYPES["application/gzip"]).toContain(".nii.gz");
   });
 
   it("maps every type to at least one dot-prefixed extension", () => {

@@ -42,7 +42,26 @@
     "get /files/{key}": { "route": "legacyFileMetadata" },
     "delete /files/{key}": { "route": "legacyFileDelete" },
     "post /upload/presign": { "route": "uploadPresign" },
-    "post /upload/verify": { "route": "uploadVerify" }
+    "post /upload/verify": { "route": "uploadVerify" },
+    "get /studies": { "route": "studies", "query": { "name": "studies", "segments": ["studies"] } },
+    "post /studies": { "route": "studyCreate" },
+    "get /studies/stats": {
+      "route": "studySegmentationStats",
+      "query": { "name": "segmentationStats", "segments": ["studies", "stats"] }
+    },
+    "get /studies/sources": {
+      "route": "studySources",
+      "query": { "name": "studySources", "segments": ["studies", "sources"] }
+    },
+    "get /studies/{study_id}": {
+      "route": "study",
+      "query": { "name": "study", "segments": ["studies", "detail"] }
+    },
+    "patch /studies/{study_id}": { "route": "studyUpdate" },
+    "delete /studies/{study_id}": { "route": "studyDelete" },
+    "post /studies/{study_id}/segment": { "route": "studySegment" },
+    "get /studies/{study_id}/mask/download": { "route": "studyMaskDownload" },
+    "get /studies/{study_id}/source/download": { "route": "studySourceDownload" }
   },
 
   "escapeHatch": {

@@ -29,7 +29,7 @@ import { interruptedUploadMessage, type UploadItem } from "@/lib/upload-status";
 
 const MAX_TOAST_FILE_NAME_LENGTH = 80;
 /** Names of uploads that were in flight, so a reload can own up to killing them. */
-const IN_FLIGHT_STORAGE_KEY = "vibe-coding-starter-kit:uploads-in-flight";
+const IN_FLIGHT_STORAGE_KEY = "totalsegmentator-batch-pipeline:uploads-in-flight";
 
 function formatToastFileName(name: string) {
   if (name.length <= MAX_TOAST_FILE_NAME_LENGTH) return name;
@@ -224,7 +224,7 @@ export function UploadQueueProvider({
     for (const rejection of rejections) {
       const errors = rejection.errors.map((e) => {
         if (e.code === "file-too-large") {
-          return `exceeds 100MB limit (${humanizeBytes(rejection.file.size)})`;
+          return `exceeds 600MB limit (${humanizeBytes(rejection.file.size)})`;
         }
         if (e.code === "file-invalid-type") return "file type not supported";
         return e.message;

@@ -46,6 +46,9 @@ ALLOWED_TYPES = {
     # Additional video containers (mp4 already above).
     "video/quicktime",
     "video/webm",
+    # NIfTI medical volumes (.nii.gz) — the Bulk Volume Ingest path. Compressed
+    # NIfTI is gzip; the magic-byte check below confirms the gzip signature.
+    "application/gzip",
 }
 
 _DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -77,6 +80,8 @@ MIME_EXTENSION_MAP: dict[str, set[str]] = {
     _PPTX: {"pptx"},
     "video/quicktime": {"mov"},
     "video/webm": {"webm"},
+    # `.nii.gz` -> last extension is `gz`; also accepts a bare `.gz`.
+    "application/gzip": {"gz"},
 }
 
 # Magic-byte signatures for the binary types we accept. The client-declared
@@ -100,6 +105,8 @@ _CONTENT_SIGNATURES: dict[str, Callable[[bytes], bool]] = {
     "audio/mpeg": lambda d: d[:3] == b"ID3"
     or (len(d) >= 2 and d[0] == 0xFF and (d[1] & 0xE0) == 0xE0),
     "audio/wav": lambda d: d[:4] == b"RIFF" and d[8:12] == b"WAVE",
+    # gzip member header: 0x1f 0x8b. Covers compressed NIfTI (.nii.gz).
+    "application/gzip": lambda d: d[:2] == b"\x1f\x8b",
 }
 
 

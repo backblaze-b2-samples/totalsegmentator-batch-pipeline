@@ -38,7 +38,15 @@ class Settings(BaseSettings):
     # app-config.ts, so this is the backend's declaration of the same slug:
     # keep it equal to the package name, and derive identifiers from it rather
     # than writing a second name a rename sweep has to know about.
-    app_slug: str = "vibe-coding-starter-kit"
+    app_slug: str = "totalsegmentator-batch-pipeline"
+
+    # Segmentation device selection for TotalSegmentator (env: TS_DEVICE).
+    # `auto` (default) auto-detects at runtime: CUDA GPU if available, else CPU.
+    # nnU-Net/TotalSegmentator MPS support is weak, so Apple Silicon falls back
+    # CUDA -> CPU under `auto`; `mps` is an explicit opt-in. `gpu`/`cpu` force a
+    # device. Resolved in app/repo/segmentation.py, never here (no torch import
+    # in the config layer). Accepted: auto | cpu | gpu | mps.
+    ts_device: str = "auto"
 
     api_port: int = 8000
     # Interactive API docs (/docs, /redoc, /openapi.json). On by default for
@@ -55,8 +63,11 @@ class Settings(BaseSettings):
     # listing each one. NEVER ship this to production.
     api_cors_origin_regex: str = ""
 
-    # Upload limits
-    max_file_size: int = 100 * 1024 * 1024  # 100MB
+    # Upload limits. Raised well above the kit default because a raw CT/MRI
+    # volume (NIfTI .nii.gz) is routinely 100-500 MB — the source side of this
+    # app's write-amplification story. The browser streams it straight to B2 via
+    # a presigned PUT, so this ceiling never buffers in the API process.
+    max_file_size: int = 600 * 1024 * 1024  # 600MB
     # TTL for the presigned PUT the browser uploads directly to B2 with. Long
     # enough for a big file on a slow link, short enough that a leaked URL is a
     # narrow, single-key, single-size window.

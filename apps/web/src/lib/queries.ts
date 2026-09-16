@@ -8,20 +8,37 @@ import {
 } from "@tanstack/react-query";
 import {
   ApiError,
+  createStudy,
   deleteFile,
+  deleteStudy,
   getDownloadUrl,
   getFileDetail,
   getFiles,
   getFileStats,
   getHealth,
   getPreviewUrl,
+  getSegmentationStats,
+  getStudies,
+  getStudyDetail,
+  getStudyMaskUrl,
+  getStudySources,
+  getStudySourceUrl,
   getUploadActivity,
+  segmentStudy,
+  updateStudy,
 } from "@/lib/api-client";
 import type {
+  CreateStudyRequest,
   FileMetadata,
   FileMetadataDetail,
   FileUrlResponse,
-} from "@vibe-coding-starter-kit/shared";
+  SegmentationStats,
+  SegmentRequest,
+  SourceObject,
+  Study,
+  StudyDetail,
+  UpdateStudyRequest,
+} from "@totalsegmentator-batch-pipeline/shared";
 import { qk } from "@/lib/generated/query-keys";
 
 // Query keys are GENERATED from the API contract (`pnpm gen:api`) and their
@@ -166,5 +183,99 @@ export function useDeleteFile() {
       dropDeletedFileFromCache(qc, fileKey);
       qc.invalidateQueries({ queryKey: qk.all });
     },
+  });
+}
+
+// --- Studies (the primary entity) -------------------------------------------
+// The per-study detail key is composed by appending the id to the generated
+// `qk.study()` prefix — a caching decision, exactly like dropDeletedFileFromCache
+// above builds a partial `[...qk.all, "files"]` key. Query keys themselves stay
+// generated; only their composition and the polling/invalidation policy are
+// hand-written here.
+
+export function useStudies(limit = 100, { enabled = true }: QueryGate = {}) {
+  return useQuery<Study[], ApiError>({
+    queryKey: qk.studies(limit),
+    queryFn: () => getStudies(limit),
+    enabled,
+  });
+}
+
+export function useSegmentationStats({ enabled = true }: QueryGate = {}) {
+  return useQuery<SegmentationStats, ApiError>({
+    queryKey: qk.segmentationStats(),
+    queryFn: getSegmentationStats,
+    enabled,
+  });
+}
+
+export function useStudySources({ enabled = true }: QueryGate = {}) {
+  return useQuery<SourceObject[], ApiError>({
+    queryKey: qk.studySources(),
+    queryFn: getStudySources,
+    enabled,
+  });
+}
+
+// Study detail polls itself every 3s while a segmentation run is in flight, so
+// the page moves from `running` to `done`/`failed` without a manual refresh.
+export function useStudyDetail(studyId: string | undefined) {
+  return useQuery<StudyDetail, ApiError>({
+    queryKey: [...qk.study(), studyId ?? ""],
+    queryFn: () => getStudyDetail(studyId as string),
+    enabled: !!studyId,
+    refetchInterval: (query) =>
+      query.state.data?.study.status === "running" ? 3000 : false,
+  });
+}
+
+export function useCreateStudy() {
+  const qc = useQueryClient();
+  return useMutation<Study, ApiError, CreateStudyRequest>({
+    mutationFn: (req) => createStudy(req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.all }),
+  });
+}
+
+export function useUpdateStudy(studyId: string) {
+  const qc = useQueryClient();
+  return useMutation<Study, ApiError, UpdateStudyRequest>({
+    mutationFn: (req) => updateStudy(studyId, req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...qk.study(), studyId] });
+      qc.invalidateQueries({ queryKey: [...qk.all, "studies"] });
+    },
+  });
+}
+
+export function useDeleteStudy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (studyId: string) => deleteStudy(studyId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.all }),
+  });
+}
+
+export function useSegmentStudy(studyId: string) {
+  const qc = useQueryClient();
+  return useMutation<Study, ApiError, SegmentRequest | undefined>({
+    mutationFn: (req) => segmentStudy(studyId, req ?? {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...qk.study(), studyId] });
+      qc.invalidateQueries({ queryKey: [...qk.all, "studies"] });
+    },
+  });
+}
+
+// On-demand presigned downloads — mutations so they are never cached or replayed.
+export function useStudyMaskDownload() {
+  return useMutation<FileUrlResponse, ApiError, string>({
+    mutationFn: (studyId) => getStudyMaskUrl(studyId),
+  });
+}
+
+export function useStudySourceDownload() {
+  return useMutation<FileUrlResponse, ApiError, string>({
+    mutationFn: (studyId) => getStudySourceUrl(studyId),
   });
 }
