@@ -22,7 +22,7 @@
 # the first time segmentation runs. Pin below 81 until upstream drops it.
 setuptools<81
 TotalSegmentator>=2.4.0,<2.6
-nnunetv2>=2.4.1,<3
+nnunetv2>=2.8.1,<3
 torch>=2.2.0,<2.8
 nibabel>=5.2.0,<6
 numpy>=1.26.0,<2.2
